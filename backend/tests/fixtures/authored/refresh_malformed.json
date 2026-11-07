@@ -1,0 +1,20 @@
+{
+  "_fixture_note": "AUTHORED — not captured from real Terraform; shape is a hypothesis",
+  "format_version": "1.2",
+  "resource_drift": [
+    {
+      "address": 5,
+      "change": {
+        "actions": [
+          "update"
+        ]
+      }
+    },
+    "not-an-object",
+    {
+      "address": "digitalocean_firewall.web",
+      "type": "digitalocean_firewall",
+      "change": "nope"
+    }
+  ]
+}

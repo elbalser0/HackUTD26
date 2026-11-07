@@ -1,0 +1,336 @@
+{
+  "_fixture_note": "AUTHORED — not captured from real Terraform; shape is a hypothesis",
+  "format_version": "1.2",
+  "terraform_version": "1.9.8",
+  "resource_drift": [
+    {
+      "address": "digitalocean_firewall.web",
+      "mode": "managed",
+      "type": "digitalocean_firewall",
+      "name": "web",
+      "provider_name": "registry.terraform.io/digitalocean/digitalocean",
+      "change": {
+        "actions": [
+          "update"
+        ],
+        "before": {
+          "created_at": "2026-11-07T20:00:00Z",
+          "droplet_ids": [
+            100000001
+          ],
+          "id": "00000000-0000-4000-8000-0000000000f1",
+          "inbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "8080",
+              "source_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            },
+            {
+              "protocol": "tcp",
+              "port_range": "22",
+              "source_addresses": [
+                "203.0.113.10/32"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            }
+          ],
+          "name": "bg-demo-web",
+          "outbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "1-65535",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            },
+            {
+              "protocol": "udp",
+              "port_range": "53",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            }
+          ],
+          "pending_changes": [],
+          "status": "succeeded",
+          "tags": []
+        },
+        "after": {
+          "created_at": "2026-11-07T20:00:00Z",
+          "droplet_ids": [
+            100000001
+          ],
+          "id": "00000000-0000-4000-8000-0000000000f1",
+          "inbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "8443",
+              "source_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            },
+            {
+              "protocol": "tcp",
+              "port_range": "22",
+              "source_addresses": [
+                "203.0.113.10/32"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            }
+          ],
+          "name": "bg-demo-web",
+          "outbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "1-65535",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            },
+            {
+              "protocol": "udp",
+              "port_range": "53",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            }
+          ],
+          "pending_changes": [],
+          "status": "succeeded",
+          "tags": []
+        },
+        "after_unknown": {},
+        "before_sensitive": {
+          "droplet_ids": [
+            false
+          ],
+          "inbound_rule": [
+            {
+              "source_addresses": [
+                false,
+                false
+              ]
+            },
+            {
+              "source_addresses": [
+                false,
+                false
+              ]
+            }
+          ],
+          "outbound_rule": [
+            {},
+            {}
+          ],
+          "pending_changes": [],
+          "tags": []
+        },
+        "after_sensitive": {
+          "droplet_ids": [
+            false
+          ],
+          "inbound_rule": [
+            {
+              "source_addresses": [
+                false,
+                false
+              ]
+            },
+            {
+              "source_addresses": [
+                false,
+                false
+              ]
+            }
+          ],
+          "outbound_rule": [
+            {},
+            {}
+          ],
+          "pending_changes": [],
+          "tags": []
+        }
+      }
+    }
+  ],
+  "resource_changes": [
+    {
+      "address": "digitalocean_firewall.web",
+      "mode": "managed",
+      "type": "digitalocean_firewall",
+      "name": "web",
+      "provider_name": "registry.terraform.io/digitalocean/digitalocean",
+      "change": {
+        "actions": [
+          "no-op"
+        ],
+        "before": {
+          "created_at": "2026-11-07T20:00:00Z",
+          "droplet_ids": [
+            100000001
+          ],
+          "id": "00000000-0000-4000-8000-0000000000f1",
+          "inbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "8443",
+              "source_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            },
+            {
+              "protocol": "tcp",
+              "port_range": "22",
+              "source_addresses": [
+                "203.0.113.10/32"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            }
+          ],
+          "name": "bg-demo-web",
+          "outbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "1-65535",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            },
+            {
+              "protocol": "udp",
+              "port_range": "53",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            }
+          ],
+          "pending_changes": [],
+          "status": "succeeded",
+          "tags": []
+        },
+        "after": {
+          "created_at": "2026-11-07T20:00:00Z",
+          "droplet_ids": [
+            100000001
+          ],
+          "id": "00000000-0000-4000-8000-0000000000f1",
+          "inbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "8443",
+              "source_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            },
+            {
+              "protocol": "tcp",
+              "port_range": "22",
+              "source_addresses": [
+                "203.0.113.10/32"
+              ],
+              "source_droplet_ids": [],
+              "source_kubernetes_ids": [],
+              "source_load_balancer_uids": [],
+              "source_tags": []
+            }
+          ],
+          "name": "bg-demo-web",
+          "outbound_rule": [
+            {
+              "protocol": "tcp",
+              "port_range": "1-65535",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            },
+            {
+              "protocol": "udp",
+              "port_range": "53",
+              "destination_addresses": [
+                "0.0.0.0/0",
+                "::/0"
+              ],
+              "destination_droplet_ids": [],
+              "destination_kubernetes_ids": [],
+              "destination_load_balancer_uids": [],
+              "destination_tags": []
+            }
+          ],
+          "pending_changes": [],
+          "status": "succeeded",
+          "tags": []
+        },
+        "after_unknown": {},
+        "before_sensitive": {},
+        "after_sensitive": {}
+      }
+    }
+  ],
+  "errored": false
+}

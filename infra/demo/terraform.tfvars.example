@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values:
+#   cp terraform.tfvars.example terraform.tfvars
+# Never commit terraform.tfvars. Never put a token here.
+
+ssh_key_name      = "your-key-name-in-do"
+ssh_allowed_cidrs = ["203.0.113.10/32"]
+
+# Optional overrides:
+# region       = "nyc3"
+# droplet_size = "s-1vcpu-512mb-10gb"
+# name_prefix  = "breakglass-demo"
