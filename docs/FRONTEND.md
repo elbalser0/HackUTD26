@@ -1,0 +1,36 @@
+# Frontend status (Daniel)
+
+Branch: `feat/break-glass-ui`. Stack: React + TS + Vite + Vitest. Contract: `docs/API.md` on `origin/feat/break-glass-backend`.
+
+## Checklist
+
+- [x] Open-record list (baseline → observed rule, detected-at UTC, per-record check status, health banner)
+- [x] Record detail + report form (name optional, reason ≤500, optional intent); failure keeps text
+- [x] Keep/revert/defer intent (never resolves); manual Terraform edit suggestion on keep
+- [x] Apply-run view: proposed changes, per-record warnings, missing-reason fallback, check status/coverage, terminal outcome, bypass note
+- [x] Loading / empty / error / stale / failed / unsupported / resolved / demo-data states
+- [x] Wire mapping against the real contract (`src/api.ts`)
+- [ ] Apply-run view against a REAL run (none exists; runs are created only by `breakglass apply` in the terminal, which needs real infra)
+- [ ] Mobile layout check, visual polish
+
+## Running
+
+Backend: see docs/API.md (`breakglass seed-demo --with-report`, `uvicorn breakglass.api:app --port 8000`).
+Frontend: `npm run dev` — Vite proxies `/api` to `http://127.0.0.1:8000` (override `API_TARGET`). No absolute base URL, so no CORS dependence.
+Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE DATA" badge).
+
+## Verification evidence (2026-11-07)
+
+- `npm test`: 12 passed (stub adapter + wire-mapping; not backend integration)
+- `npm run lint`: clean; `npm run build`: ok
+- REAL backend (branch `feat/break-glass-backend` @41280dd, seeded demo record) in Chrome via the Vite proxy:
+  - list/detail render live data with "LIVE API" badge and demo-data tag (`demo-authored · authored-fixture`)
+  - report saved through the UI; `GET /api/records/{id}` afterwards showed new reporter/reason and `intent: defer`, `resolution: open`; values survived a page reload
+  - reason containing `<b>edit</b>` rendered as plain text
+  - backend stopped → proxy 502 → UI shows "Backend unavailable" error, not an empty list
+- NOT verified against the real backend: apply-run view (only stub/fixture tests), 409 on resolved record, 422 messages.
+
+## Notes for Samuel
+
+- Records list has no scan timestamp; freshness is derived from per-record `last_check_status/at` plus `/api/health`. An empty list therefore cannot show scan age.
+- Warning `message` is shown as-is (plain text) under the structured reason quote.
