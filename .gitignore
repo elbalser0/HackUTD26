@@ -27,3 +27,22 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Backend (Python)
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backend/*.db
+backend/*.db-*
+*.egg-info/
+
+# Terraform: state, plans and raw JSON may contain secrets — never commit
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+infra/demo/raw/
