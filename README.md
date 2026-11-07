@@ -1,54 +1,74 @@
-# HackUTD26
+# Break-Glass Handoff
 
-Private HackUTD 2026 team workspace, preparing for the NMC² challenge. **Official challenge pending.** Infrastructure as code is an unconfirmed booth hint, not an implemented product requirement.
+HackUTD 2026 project for the NMC² challenge. During an incident an engineer may change infrastructure by hand without updating Terraform, and a later `terraform apply` can silently undo that fix. Break-Glass Handoff records the emergency change and its explanation, then pauses a later apply that would reverse it. The engineer must acknowledge or cancel with the context in front of them.
 
-## Run locally
+The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scope and acceptance. It records requirements, **not** implemented or verified results. This is an independent hackathon project, not affiliated with or endorsed by NMC².
 
-Node 22.12+ (Node 22 recommended) and npm required.
+## What exists
+
+| Piece | Where | State |
+|---|---|---|
+| Detector, matcher, SQLite records, report and decision history, FastAPI, CLI, guarded apply wrapper, `recheck` | `backend/` | Written and tested offline. Terraform is mocked, and every fixture is hand-written (authored). |
+| Web UI: open records, record detail and report form, apply-warning view | `src/` | Built. Read-only: it **never runs Terraform**. The CLI owns execution and approval. |
+| Demo Terraform (droplet and firewall) | `infra/demo/` | Passes `terraform validate`. **Not provisioned.** |
+| Real Terraform spike | n/a | **Pending.** Detector direction, apply-run view and keep-path behavior are unverified against real Terraform output. |
+| Admin dashboard (PRD R9: team-wide log, filters, timeline, server-side authorization) | n/a | **Not built yet.** |
+| Agent classification and downtime analytics (PRD §7) | n/a | Proposed post-core phase. Not built. |
+
+Coverage is only `digitalocean_firewall` → `inbound_rule`. Anything else is reported as unsupported, never as "no drift". See [docs/BACKEND.md](docs/BACKEND.md).
+
+## Run it locally
+
+Requires Node 22.12+ and Python 3.12+. You need repository access to clone.
 
 ```sh
 git clone https://github.com/elbalser0/HackUTD26.git
 cd HackUTD26
 npm ci
+```
+
+**Backend** (authored demo data, no cloud account needed):
+
+```sh
+cd backend
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"
+breakglass seed-demo --with-report
+uvicorn breakglass.api:app --port 8000
+```
+
+**Frontend**, in a second terminal at the repo root:
+
+```sh
 npm run dev
 ```
 
-Open the localhost URL printed by Vite. You need repository access to clone. No secrets, backend, home-server access, or cloud account required.
+Vite proxies `/api` to `http://127.0.0.1:8000` (override with `API_TARGET`). Data tagged `demo-authored` is hand-written, not real detection. To work on the UI without a backend, open the app with `?fixture` (also `?fixture=empty|error|stale|failed`). It shows a "DEV FIXTURE DATA" badge.
 
-## Included
-
-- React + TypeScript + Vite; lightweight CSS, no component-library lock-in.
-- Responsive dark workspace inspired by NMC²’s black/white/blue palette.
-- Workspace, challenge notes, and team navigation.
-- Browser-local note persistence with storage-error handling. Notes are **not shared or synced**.
-- Unit/component tests and GitHub Actions for lint, test, and production build.
+## Checks
 
 ```sh
 npm run lint
-npm test
+npm test            # frontend and docs/CSS contract tests; adapter stubs, not backend integration
 npm run build
-npm run preview
-npm run format
+cd backend && python -m pytest -q
 ```
 
-## Where to work
+GitHub Actions runs the frontend checks on pushes and pull requests.
 
-- `src/App.tsx`: workspace views and initial reusable Panel component.
-- `src/index.css`: typography and design tokens.
-- `src/App.css`: responsive layout and component styles.
-- `src/App.test.tsx`: navigation, honest empty state, persistence, storage-failure coverage.
-- [Living project document](docs/PROJECT.md): context, ownership, decisions, open questions, next decision gate.
+## Docs
 
-The frontend makes no API calls and provisions nothing. Do not put secrets in `VITE_*` variables; they are public bundle values. Agree on one backend contract after the brief arrives. Roboto loads from Google Fonts with a local Arial fallback; no dependency on that request succeeding.
+- [Product requirements](<docs/Break-Glass Handoff — PRD.md>): source of truth
+- [docs/API.md](docs/API.md): HTTP contract between backend and UI
+- [docs/BACKEND.md](docs/BACKEND.md): backend status, rules, guarded apply, runbooks
+- [docs/FRONTEND.md](docs/FRONTEND.md): UI status and verification evidence
+- [docs/PROJECT.md](docs/PROJECT.md): living decisions and next gate
 
-## Team starting points
+## Safety and honesty
 
-Daniel: product/frontend · Samuel: backend · Andrew: infrastructure exploration. Roles are flexible. Home-server use remains unvalidated.
-
-## Design / affiliation
-
-Visual reference: https://nmc2.com/ — black and white, blue `#2b9cfc`, light oversized typography, geometric blue imagery. CSS artwork and H² project mark are original. This is an independent hackathon project, not affiliated with or endorsed by NMC².
-
-## Verification
-
-Initial local checks: lint, four component tests, and TypeScript/production build passed. GitHub Actions repeats these checks on pushes and pull requests. No backend or provisioning tests exist yet. Nothing is publicly deployed.
+- Never commit secrets, `*.tfstate*`, `*.tfplan`, `*.tfvars`, or `.env`. Anything prefixed `VITE_` is public in the bundle.
+- The DigitalOcean token lives outside the repo and is read only by the backend's Terraform child process.
+- No cloud operation runs without explicit team approval.
+- Reasons and reporters are self-reported, not verified authorship. Detected-at is not changed-at.
+- Running `terraform apply` directly bypasses the wrapper. Enforcement through CI is a stretch goal, not built.
+- Visual reference: https://nmc2.com/ (black and white, blue `#2b9cfc`). The geometric artwork and B² mark are original CSS.

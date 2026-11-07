@@ -52,7 +52,10 @@ function App() {
       <div className="body">
         <header>
           <span>
-            Break-Glass Handoff <span className="slash">/</span> {crumb}
+            <span className="crumb-root">
+              Break-Glass Handoff <span className="slash">/</span>{" "}
+            </span>
+            <span className="crumb-current">{crumb}</span>
           </span>
           <span className="badge">
             {usingFixtures ? "DEV FIXTURE DATA — NOT A BACKEND" : "LIVE API"}

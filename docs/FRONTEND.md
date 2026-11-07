@@ -11,7 +11,8 @@ Branch: `feat/break-glass-ui`. Stack: React + TS + Vite + Vitest. Contract: `doc
 - [x] Loading / empty / error / stale / failed / unsupported / resolved / demo-data states
 - [x] Wire mapping against the real contract (`src/api.ts`)
 - [ ] Apply-run view against a REAL run (none exists; runs are created only by `breakglass apply` in the terminal, which needs real infra)
-- [ ] Mobile layout check, visual polish
+- [x] Mobile layout check at 375px and 320px (fixture data): no horizontal overflow; tap targets >= 44px; breadcrumb shows the current page; back link spaced from the eyebrow
+- [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) not started
 
 ## Running
 
@@ -28,6 +29,7 @@ Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE D
   - report saved through the UI; `GET /api/records/{id}` afterwards showed new reporter/reason and `intent: defer`, `resolution: open`; values survived a page reload
   - reason containing `<b>edit</b>` rendered as plain text
   - backend stopped → proxy 502 → UI shows "Backend unavailable" error, not an empty list
+- Mobile pass (2026-11-07): measured in Chrome via 375px/320px iframes on `?fixture` data. `src/mobile.test.ts` guards the stylesheet rules only; it does not prove layout.
 - NOT verified against the real backend: apply-run view (only stub/fixture tests), 409 on resolved record, 422 messages.
 
 ## Notes for Samuel
