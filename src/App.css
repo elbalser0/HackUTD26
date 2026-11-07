@@ -722,3 +722,35 @@ select:focus-visible {
   color: #d5dbe5;
   margin: 8px 0;
 }
+
+/* ---- Phone ergonomics (found in a 375px browser pass; guarded by mobile.test.ts) ---- */
+@media (max-width: 760px) {
+  nav button,
+  .btn,
+  .wordmark,
+  input {
+    min-height: 44px;
+  }
+  .detail > a:first-child,
+  .card-top a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .detail > a:first-child {
+    margin-bottom: 8px;
+  }
+  header > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .crumb-root {
+    display: none;
+  }
+  .badge {
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+}
