@@ -39,3 +39,7 @@ and these fixtures together.
 
 Regenerating: these were produced once by a throwaway script and are now
 maintained by hand. Edit them directly.
+
+## Update after first real plan (2026-11-07)
+
+Real `terraform plan` output (provider v2.107) includes `"action": "allow"` on every firewall rule. All authored fixtures were updated to carry it, and `action` is part of rule identity. The before/after direction is still unverified until a real refresh-only capture lands in `../real/`.

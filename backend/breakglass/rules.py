@@ -4,7 +4,7 @@ Pure functions only. Input is untrusted JSON (from `terraform show -json`), so
 every value is type-checked; malformed rule objects normalize to None rather
 than raising.
 
-Identity: two rules are equal iff protocol, port_range and every source
+Identity: two rules are equal iff action, protocol, port_range and every source
 collection are equal after normalization. Source collections are sorted and
 de-duplicated, so provider ordering never matters, and rules are always
 compared as sets, never by list index.
@@ -71,7 +71,8 @@ def normalize_rule(raw: dict) -> FirewallRule | None:
         return None
     protocol = _scalar_str(raw.get("protocol"))
     port_range = _scalar_str(raw.get("port_range"))
-    if protocol is _MALFORMED or port_range is _MALFORMED:
+    action = _scalar_str(raw.get("action"))
+    if protocol is _MALFORMED or port_range is _MALFORMED or action is _MALFORMED:
         return None
     sources: dict[str, tuple[str, ...]] = {}
     for key in _SOURCE_KEYS:
@@ -80,6 +81,10 @@ def normalize_rule(raw: dict) -> FirewallRule | None:
             return None
         sources[key] = t  # type: ignore[assignment]
     return FirewallRule(
+        # A missing action means "allow": DigitalOcean rules without the field predate
+        # deny support. Treating it as None would make old state and new live output
+        # look like different rules (false records, missed warnings, false resolution).
+        action=action.lower() if isinstance(action, str) else "allow",
         protocol=protocol.lower() if isinstance(protocol, str) else None,
         port_range=port_range if isinstance(port_range, str) else None,
         **sources,
@@ -110,6 +115,7 @@ def rule_sort_key(rule: FirewallRule | None) -> tuple:
         return (0,)
     return (
         1,
+        rule.action or "",
         rule.protocol or "",
         rule.port_range or "",
         rule.sources_key(),
@@ -141,16 +147,18 @@ def describe_rule(rule: FirewallRule) -> str:
     """Human-readable, e.g. "inbound tcp port 8443 from 0.0.0.0/0, ::/0"."""
     proto = rule.protocol or "unknown protocol"
     port = _port_phrase(rule)
-    head = f"inbound {proto}" + (f" {port}" if port else "")
+    verb = "inbound" if rule.action in (None, "allow") else f"inbound {rule.action.upper()}"
+    head = f"{verb} {proto}" + (f" {port}" if port else "")
     return f"{head} from {_sources_phrase(rule)}"
 
 
 def short_rule(rule: FirewallRule) -> str:
     """Compact form for plan summaries, e.g. "tcp 8443"."""
     proto = rule.protocol or "unknown"
+    prefix = "" if rule.action in (None, "allow") else f"{rule.action} "
     if rule.port_range is None:
-        return proto if rule.protocol == "icmp" else f"{proto} ?"
-    return f"{proto} {rule.port_range}"
+        return prefix + (proto if rule.protocol == "icmp" else f"{proto} ?")
+    return f"{prefix}{proto} {rule.port_range}"
 
 
 _KIND_ORDER = {ChangeKind.MODIFIED: 0, ChangeKind.REMOVED: 1, ChangeKind.ADDED: 2}
@@ -173,7 +181,7 @@ def diff_rules(
     added = after - before
 
     def group_key(r: FirewallRule) -> tuple:
-        return (r.protocol or "", r.sources_key())
+        return (r.action or "", r.protocol or "", r.sources_key())
 
     rem_groups: dict[tuple, list[FirewallRule]] = defaultdict(list)
     add_groups: dict[tuple, list[FirewallRule]] = defaultdict(list)

@@ -7,9 +7,9 @@ from breakglass.models import ChangeKind, FirewallRule, MatchCandidate
 FIX = Path(__file__).parent / "fixtures" / "authored"
 ANY = ("0.0.0.0/0", "::/0")
 ADDR = "digitalocean_firewall.web"
-R8080 = FirewallRule("tcp", "8080", ANY)
-R8443 = FirewallRule("tcp", "8443", ANY)
-SSH = FirewallRule("tcp", "22", ("203.0.113.10/32",))
+R8080 = FirewallRule("tcp", "8080", ANY, action="allow")
+R8443 = FirewallRule("tcp", "8443", ANY, action="allow")
+SSH = FirewallRule("tcp", "22", ("203.0.113.10/32",), action="allow")
 
 
 def load(name):
@@ -58,7 +58,7 @@ def test_replace_reverses():
 def test_replace_keeping_rule_is_not_reversed():
     plan = load("plan_replace_firewall.json")
     plan["resource_changes"][0]["change"]["after"]["inbound_rule"].append(
-        {"protocol": "tcp", "port_range": "8443", "source_addresses": list(ANY)})
+        {"action": "allow", "protocol": "tcp", "port_range": "8443", "source_addresses": list(ANY)})
     assert match(plan, [MODIFIED]).reversed_ids == []
 
 

@@ -1,5 +1,5 @@
 {
-  "_fixture_note": "AUTHORED — not captured from real Terraform; shape is a hypothesis",
+  "_fixture_note": "AUTHORED \u2014 not captured from real Terraform; shape is a hypothesis",
   "format_version": "1.2",
   "terraform_version": "1.9.8",
   "resource_drift": [],
@@ -32,7 +32,8 @@
               "source_droplet_ids": [],
               "source_kubernetes_ids": [],
               "source_load_balancer_uids": [],
-              "source_tags": []
+              "source_tags": [],
+              "action": "allow"
             },
             {
               "protocol": "tcp",
@@ -43,7 +44,8 @@
               "source_droplet_ids": [],
               "source_kubernetes_ids": [],
               "source_load_balancer_uids": [],
-              "source_tags": []
+              "source_tags": [],
+              "action": "allow"
             }
           ],
           "name": "bg-demo-web",
@@ -58,7 +60,8 @@
               "destination_droplet_ids": [],
               "destination_kubernetes_ids": [],
               "destination_load_balancer_uids": [],
-              "destination_tags": []
+              "destination_tags": [],
+              "action": "allow"
             },
             {
               "protocol": "udp",
@@ -70,7 +73,8 @@
               "destination_droplet_ids": [],
               "destination_kubernetes_ids": [],
               "destination_load_balancer_uids": [],
-              "destination_tags": []
+              "destination_tags": [],
+              "action": "allow"
             }
           ],
           "pending_changes": [],
@@ -94,7 +98,8 @@
               "source_droplet_ids": [],
               "source_kubernetes_ids": [],
               "source_load_balancer_uids": [],
-              "source_tags": []
+              "source_tags": [],
+              "action": "allow"
             },
             {
               "protocol": "tcp",
@@ -105,7 +110,8 @@
               "source_droplet_ids": [],
               "source_kubernetes_ids": [],
               "source_load_balancer_uids": [],
-              "source_tags": []
+              "source_tags": [],
+              "action": "allow"
             }
           ],
           "name": "bg-demo-web",
@@ -120,7 +126,8 @@
               "destination_droplet_ids": [],
               "destination_kubernetes_ids": [],
               "destination_load_balancer_uids": [],
-              "destination_tags": []
+              "destination_tags": [],
+              "action": "allow"
             },
             {
               "protocol": "udp",
@@ -132,7 +139,8 @@
               "destination_droplet_ids": [],
               "destination_kubernetes_ids": [],
               "destination_load_balancer_uids": [],
-              "destination_tags": []
+              "destination_tags": [],
+              "action": "allow"
             }
           ],
           "pending_changes": null,

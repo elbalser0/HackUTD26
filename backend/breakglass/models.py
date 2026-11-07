@@ -87,9 +87,13 @@ class FirewallRule:
     source_droplet_ids: tuple[str, ...] = ()
     source_load_balancer_uids: tuple[str, ...] = ()
     source_kubernetes_ids: tuple[str, ...] = ()
+    # "allow" / "deny". The parser maps a missing action to "allow" (older provider
+    # schemas). Part of identity: an allow and a deny rule on the same port differ.
+    action: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "action": self.action,
             "protocol": self.protocol,
             "port_range": self.port_range,
             "source_addresses": list(self.source_addresses),
@@ -170,6 +174,7 @@ class DetectionResult:
 # --------------------------------------------------------------------------
 
 class RuleOut(BaseModel):
+    action: str | None
     protocol: str | None
     port_range: str | None
     source_addresses: list[str]
@@ -275,3 +280,5 @@ class HealthOut(BaseModel):
     environment: str
     terraform_dir_configured: bool
     time: datetime
+    last_scan_at: datetime | None = None    # most recent scan of this environment, if any
+    last_scan_status: str | None = None     # "ok" | "failed" | null when never scanned

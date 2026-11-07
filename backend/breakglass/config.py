@@ -2,8 +2,8 @@
 
 Security notes:
 - The Terraform working directory is fixed by server-side configuration
-  (BG_TF_DIR) and must resolve inside the repository's infra/ tree unless
-  BG_ALLOW_TF_DIR_OUTSIDE_REPO=1 is set. It is never taken from HTTP input.
+  (BG_TF_DIR) and must resolve inside one of the repository's Terraform roots
+  (break-glass-infra/) unless BG_ALLOW_TF_DIR_OUTSIDE_REPO=1 is set. It is never taken from HTTP input.
 - No credential is read or stored here. Terraform reads DIGITALOCEAN_TOKEN
   from its own environment.
 """
@@ -17,8 +17,8 @@ from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BACKEND_DIR.parent
-DEFAULT_TF_DIR = REPO_ROOT / "infra" / "demo"
-ALLOWED_TF_ROOT = REPO_ROOT / "infra"
+DEFAULT_TF_DIR = REPO_ROOT / "break-glass-infra"
+ALLOWED_TF_ROOTS = (REPO_ROOT / "break-glass-infra",)
 
 
 class ConfigError(ValueError):
@@ -44,9 +44,9 @@ def _resolve_tf_dir(raw: str | None) -> Path | None:
     if not path.is_dir():
         return None
     if os.environ.get("BG_ALLOW_TF_DIR_OUTSIDE_REPO") != "1":
-        allowed = ALLOWED_TF_ROOT.resolve()
-        if path != allowed and allowed not in path.parents:
-            raise ConfigError(f"BG_TF_DIR must be inside {allowed}")
+        roots = [r.resolve() for r in ALLOWED_TF_ROOTS]
+        if not any(path == r or r in path.parents for r in roots):
+            raise ConfigError("BG_TF_DIR must be inside " + " or ".join(str(r) for r in roots))
     return path
 
 

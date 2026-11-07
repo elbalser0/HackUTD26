@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from functools import lru_cache
 
 from fastapi import FastAPI, Query, Request
@@ -108,13 +109,23 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
 
     @app.get("/api/health", response_model=HealthOut)
     def health():
+        last = None
         try:
             database().ping()
+            last = database().last_scan(settings.environment)
             db_status, status, code = "ok", "ok", 200
         except Exception:
             db_status, status, code = "error", "degraded", 503
         body = HealthOut(status=status, version=__version__, db=db_status, environment=settings.environment,
-                         terraform_dir_configured=settings.tf_dir is not None, time=utcnow())
+                         terraform_dir_configured=settings.tf_dir is not None, time=utcnow(),
+                         last_scan_at=None, last_scan_status=None)
+        if last is not None:
+            try:
+                body = body.model_copy(update={
+                    "last_scan_at": datetime.fromisoformat(last["started_at"].replace("Z", "+00:00")),
+                    "last_scan_status": last["status"]})
+            except (ValueError, TypeError, AttributeError):
+                pass  # malformed row: report no scan age rather than failing health
         return JSONResponse(status_code=code, content=json.loads(body.model_dump_json()))
 
     @app.get("/api/records", response_model=RecordList)
