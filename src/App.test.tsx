@@ -329,3 +329,14 @@ test("apply run: null plan fingerprint is flagged", async () => {
   render(<App />);
   expect(await screen.findByText(/Planning failed/)).toBeInTheDocument();
 });
+
+test("header keeps the current page name apart from the product-name prefix so phones can hide only the prefix", () => {
+  setAdapter(stub({}));
+  window.location.hash = "#/apply/run_1";
+  const { container } = render(<App />);
+  const header = container.querySelector("header")!;
+  const root = header.querySelector(".crumb-root");
+  expect(root).toHaveTextContent("Break-Glass Handoff");
+  expect(root).not.toHaveTextContent("Apply warning");
+  expect(header.querySelector(".crumb-current")).toHaveTextContent("Apply warning");
+});
