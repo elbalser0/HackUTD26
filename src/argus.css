@@ -181,7 +181,7 @@
 .ar .title { font-size: 22px; font-weight: 400; }
 .ar .fold { width: 100%; background: none; border: 0; border-top: 1px solid var(--border); color: inherit; cursor: pointer; text-align: left; }
 .ar .top .brand { display: block; padding: 0; }
-.ar .top .brand img { display: block; height: 28px; width: auto; }
+.ar .top .brand img { display: block; height: 32px; width: auto; }
 .ar .content .state, .ar .content .notice { margin: 0; }
 .ar a:focus-visible, .ar button:focus-visible, .ar textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .ar .tl { padding-top: 12px; }
