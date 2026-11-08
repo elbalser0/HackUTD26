@@ -221,6 +221,36 @@ All errors use this envelope:
 | 422 | `validation_error` (message summarizes the failing fields) |
 | 500 | `internal` (no internal details are returned) |
 
+## Admin log (R9)
+
+Read-only views for an authorized operations lead. They are derived from the append-only `events`, plus `records` (detection and resolution times) and `apply_runs` (to surface runs that never recorded a completion, and runs from before the events table existed). Nothing is invented.
+
+**Authorization (server-side).** Set `BG_ADMIN_TOKEN` on the server and send `Authorization: Bearer <token>`. A token in the URL is never accepted.
+- No token configured (unset or blank): `403 forbidden` (fails closed).
+- Missing or wrong credentials: `401 unauthorized` with `WWW-Authenticate: Bearer`.
+- It is one **shared** token: it shows that an admin read the log, not which admin. The older `/api/records` and `/api/apply-runs` endpoints are still unauthenticated.
+
+### AdminEvent
+```json
+{ "at": "2026-11-08T03:35:12Z", "type": "review", "environment": "demo",
+  "record_ids": ["rec_..."], "run_id": "run_...", "resource_addresses": ["digitalocean_firewall.demo"],
+  "actor": "Dana", "actor_assurance": "self-reported", "outcome": null,
+  "plan_fingerprint": "sha256:...", "detail": "decision: revert — webhook fixed upstream" }
+```
+`type`: `change_detected` · `explained` · `decision` · `review` · `run_started` · `run_finished` · `run_unfinished` · `resolved`. `actor_assurance` is `self-reported`, `local-os-user (not verified)` or `system`; it is never verified identity. `outcome` is set on `run_finished` and `run_unfinished` only. `run_unfinished` is derived for a run that has no recorded completion, and its outcome is **`unknown`**, never success. `plan_fingerprint` on `review` and `run_started` is the exact plan that was reviewed and then executed.
+
+### `GET /api/admin/log`
+Newest first. Filters (all optional, AND): `engineer` (case-insensitive exact match on the event actor), `resource` (exact address), `since` / `until` (ISO 8601 **with timezone**, inclusive), `outcome` (a terminal run outcome or `unknown`; selects run results only), `limit` (1-500, default 100). Returns `{events, total_matching, limitations}`. Invalid filters are `422`.
+
+### `GET /api/admin/records/{id}/timeline`
+Oldest first: change, every explanation, every decision and review, each wrapper run that touched the record (start, and finish or unfinished), and resolution. Also returns `gaps` (`no_reason_recorded`, `no_decision_recorded`, `no_run_linked`, `run_outcome_unknown` with `run_id`) so missing evidence is visible. `404` for an unknown record.
+
+### Limitations (also returned in every response)
+- Actors are not verified identities. A reporter is self-reported; a wrapper reviewer is self-reported or the local OS user.
+- One shared admin token; no per-admin identity or audit of admin reads.
+- `unknown` is not `failed`: the run may have been interrupted, crashed, or still be running.
+- Records and runs from before the events table existed show only their stored values, labelled "predates event history".
+
 ## Deliberately not in the HTTP API
 
 Scan, apply, re-check and any Terraform execution are **CLI-only** (`breakglass scan|apply|recheck`). The HTTP API never runs Terraform and never accepts commands or paths. The browser is a read-and-annotate surface. Applying stays a human decision in the terminal.

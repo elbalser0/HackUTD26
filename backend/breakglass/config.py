@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +33,8 @@ class Settings:
     cors_origins: tuple[str, ...]
     allowed_hosts: tuple[str, ...]
     terraform_bin: str
+    # Shared admin bearer token for /api/admin/*. Never logged or echoed; unset or blank = admin API disabled.
+    admin_token: str | None = field(default=None, repr=False)
 
 
 def _resolve_tf_dir(raw: str | None) -> Path | None:
@@ -61,4 +63,5 @@ def load_settings() -> Settings:
             "BG_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",") if h.strip()),
         # Absolute path so Windows never runs a terraform.exe found in the current directory.
         terraform_bin=shutil.which(os.environ.get("BG_TERRAFORM_BIN", "terraform")) or "terraform",
+        admin_token=os.environ.get("BG_ADMIN_TOKEN") or None,
     )
