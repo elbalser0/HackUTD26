@@ -10,8 +10,8 @@ The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scop
 |---|---|---|
 | Detector, matcher, SQLite records, report and decision history, FastAPI, CLI, guarded apply wrapper, `recheck` | `backend/` | Written and tested offline. Terraform is mocked, and every fixture is hand-written (authored). |
 | Web UI: open records, record detail and report form, apply-warning view | `src/` | Built. Read-only: it **never runs Terraform**. The CLI owns execution and approval. |
-| Demo Terraform (firewall `digitalocean_firewall.demo`) | `break-glass-infra/` | Firewall **applied** from Daniel's machine. It is not attached to the droplet (`attach_firewall = false`). |
-| Real Terraform spike | n/a | **Partial.** A real `plan` succeeded. Detecting a console edit, the detector direction, the apply-run view and keep-path behavior are not yet verified against real Terraform output. |
+| Demo Terraform (firewall `digitalocean_firewall.demo`) | `break-glass-infra/` | Firewall **applied** from Daniel's machine, the single operator that holds the Terraform state. It is not attached to the droplet (`attach_firewall = false`). The droplet already existed; Terraform manages only the firewall. |
+| Real Terraform spike | n/a | **Partial.** A real `plan` succeeded (token scopes OK; its output showed a rule `action` field, now handled). Detecting a console edit, the detector direction, the apply-run view and keep-path behavior are not yet verified against real Terraform output. |
 | Admin dashboard (PRD R9: team-wide log, filters, timeline, server-side authorization) | n/a | **Not built yet.** |
 | Agent classification and downtime analytics (PRD §7) | n/a | Proposed post-core phase. Not built. |
 
