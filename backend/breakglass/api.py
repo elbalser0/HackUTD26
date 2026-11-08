@@ -84,12 +84,14 @@ def apply_run_out(row) -> ApplyRunOut:
 
 def create_app(db: Database | None = None, allowed_hosts: list[str] | None = None,
                admin_token: str | None = None, firebase_project_id: str | None = None,
-               admin_emails: list[str] | None = None, verifier: "auth.Verifier | None" = None) -> FastAPI:
+               admin_emails: list[str] | None = None, verifier: "auth.Verifier | None" = None,
+               all_admins: bool | None = None) -> FastAPI:
     settings = load_settings()
     token = admin_token if admin_token is not None else settings.admin_token
     project = (firebase_project_id if firebase_project_id is not None else settings.firebase_project_id) or None
     admins = {e.strip().lower() for e in (admin_emails if admin_emails is not None else settings.admin_emails)
               if e and e.strip()}
+    everyone_admin = settings.all_admins if all_admins is None else all_admins
     # Firebase is on only when a project id is configured (an injected verifier alone does not enable it).
     verify = (verifier or auth.firebase_verifier(project)) if project else None
     app = FastAPI(title="Argus API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -164,7 +166,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
 
     def is_admin_email(email: str | None) -> bool:
         """The one admin rule used by both /api/me (persona) and require_admin (enforcement)."""
-        return verify is not None and bool(email) and email in admins
+        return verify is not None and bool(email) and (everyone_admin or email in admins)
 
     def require_reader(request: Request) -> None:
         """Reads: open when Firebase is not configured (offline demo). Otherwise any verified
@@ -179,7 +181,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
     def require_admin(request: Request) -> None:
         """Server-side gate for /api/admin/*: the shared token (offline fallback) OR a
         Firebase sign-in whose verified email is allowlisted. Fails closed."""
-        firebase_admin = verify is not None and bool(admins)
+        firebase_admin = verify is not None and (bool(admins) or everyone_admin)
         if not token and not firebase_admin:
             raise AuthDenied(403, "admin_not_configured", "admin access is not configured on this server")
         supplied = auth.bearer_token(request.headers.get("authorization"))
@@ -266,7 +268,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
                          last_scan_at=None, last_scan_status=None,
                          auth={"firebase_project_id": project, "writes_require_sign_in": verify is not None,
                                "reads_require_sign_in": verify is not None,
-                               "admin_via_firebase": verify is not None and bool(admins),
+                               "admin_via_firebase": verify is not None and (bool(admins) or everyone_admin),
                                "admin_via_shared_token": bool(token)})
         if last is not None:
             try:
