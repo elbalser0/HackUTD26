@@ -88,7 +88,7 @@ Needs to browse records across engineers, reconstruct decision and execution tim
 
 ## 6. End-to-end workflow
 
-1. Terraform provisions a dedicated demo server and DigitalOcean firewall before judging.
+1. A dedicated demo server exists before judging, and Terraform manages its DigitalOcean firewall. (Team decision: the droplet is pre-provisioned; Terraform manages only the firewall.)
 2. During a staged incident, an engineer manually changes a tracked firewall setting in the DigitalOcean control panel. This is the source-PRD demo proposal, not evidence of a completed spike.
 3. A Terraform refresh-only plan detects the change. The system stores resource identity, attribute, previous and observed values, and detected-at time.
 4. The web app presents a pre-filled, one-line explanation prompt, answerable in about ten seconds. The engineer supplies what changed and why; the explanation persists after reload. CLI/Slack capture remains an optional future interface, not a separate data store.

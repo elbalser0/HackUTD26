@@ -10,8 +10,8 @@ The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scop
 |---|---|---|
 | Detector, matcher, SQLite records, report and decision history, FastAPI, CLI, guarded apply wrapper, `recheck` | `backend/` | Written and tested offline. Terraform is mocked, and every fixture is hand-written (authored). |
 | Web UI: open records, record detail and report form, apply-warning view | `src/` | Built. Read-only: it **never runs Terraform**. The CLI owns execution and approval. |
-| Demo Terraform (droplet and firewall) | `infra/demo/` | Passes `terraform validate`. **Not provisioned.** |
-| Real Terraform spike | n/a | **Pending.** Detector direction, apply-run view and keep-path behavior are unverified against real Terraform output. |
+| Demo Terraform (firewall only) | `break-glass-infra/` | Firewall `break-glass-demo` **applied** from Daniel's machine (the single operator, which holds the state). Not yet attached to the droplet. The droplet is an existing one and is not provisioned by Terraform. |
+| Real Terraform spike | n/a | **Partial.** A real `terraform plan` works (token scopes OK; output showed rule `action`, now handled). Detecting a console edit, detector direction, the apply-run view and keep-path behavior are still unverified against real Terraform output. |
 | Admin dashboard (PRD R9: team-wide log, filters, timeline, server-side authorization) | n/a | **Not built yet.** |
 | Agent classification and downtime analytics (PRD §7) | n/a | Proposed post-core phase. Not built. |
 
