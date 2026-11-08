@@ -15,7 +15,7 @@ uvicorn breakglass.api:app --port 8000
 
 - **Base URL:** `http://localhost:8000` (frontend: `VITE_API_BASE_URL=http://localhost:8000`, already in `.env.example`).
 - **CORS:** allows `http://localhost:5173` and `http://127.0.0.1:5173` (Vite dev). Override with `BG_CORS_ORIGINS`.
-- **Auth:** optional Firebase (Google) sign-in; see [Sign-in](#sign-in-firebase). Without it, engineer endpoints are open. Local demo only: bind to localhost and do not expose publicly.
+- **Auth:** optional Firebase (Google) sign-in; see [Sign-in](#sign-in-firebase). Without it, engineer endpoints are open. With it, every read and write needs a signed-in employee or admin (or the shared admin token); `/api/health` stays open. Local demo only: bind to localhost and do not expose publicly.
 - **Host allowlist:** requests must use host `localhost`, `127.0.0.1` or `[::1]` (otherwise `400`). This blocks DNS-rebinding pages. Override with `BG_ALLOWED_HOSTS`.
 - **Content type:** JSON, UTF-8.
 
@@ -87,9 +87,12 @@ The example below is a `modified` rule. **In the live demo the console edit *add
   "superseded_by": null,
   "last_check_status": "current",
   "last_check_at": "2026-11-08T03:45:02.000000Z",
-  "evidence_source": "terraform-refresh-only"
+  "evidence_source": "terraform-refresh-only",
+  "reporter_assurance": "self-reported",
+  "last_activity": { "at": "2026-11-08T03:31:40.000000Z", "type": "report" }
 }
 ```
+`reporter_assurance`: assurance of the latest explanation, `"self-reported"` (CLI, or web without sign-in) or `"google-account (verified sign-in)"`; `null` when there is no reason. `last_activity`: the latest of detection (`detected`), any event for the record (`report`, `decision`, `review`, `run_started`, `run_finished`) and resolution (`resolved`). Both are derived from the append-only events; returned by `GET /api/records` and `GET /api/records/{id}`.
 Nullable: `baseline_value` (null when `added`), `observed_value` (null when `removed`), `reporter`, `reason`, `reported_at`, `intent_note`, `intent_updated_at`, `resolution_reason`, `resolved_at`, `superseded_by`, `last_check_at`.
 `evidence_source`: `terraform-refresh-only` (real scan) · `authored-fixture` (hand-written demo data) · `real-fixture` (sanitized capture replayed).
 
@@ -140,6 +143,7 @@ Show `unknown` as **outcome unknown / interrupted**, never as success.
 { "status": "ok", "version": "0.1.0", "db": "ok", "environment": "demo", "terraform_dir_configured": true, "time": "2026-11-08T03:30:00.000000Z",
   "last_scan_at": "2026-11-08T03:29:41.512000Z", "last_scan_status": "ok" }
 ```
+`auth` also carries `reads_require_sign_in` (true when Firebase is configured).
 `last_scan_at` / `last_scan_status` (`"ok"` | `"failed"`) describe the most recent scan of this environment. Both are `null` if it was never scanned, so the UI can show scan age even with an empty record list.
 If the DB cannot be opened: `503` with the **same body shape** (not the error envelope), `status: "degraded"`, `db: "error"`.
 
@@ -223,11 +227,12 @@ All errors use this envelope:
 
 ## Sign-in (Firebase)
 
-Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not a secret). The browser signs in with the Firebase JS SDK (Google provider) and sends the Firebase **ID token** on writes as `Authorization: Bearer <id token>`. Never put it in a URL.
+Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not a secret), in the terminal or as a `BG_` line in the repo-root `.env`; restart the server after a change. The browser signs in with the Firebase JS SDK (Google provider) and sends the Firebase **ID token** on writes as `Authorization: Bearer <id token>`. Never put it in a URL.
 
 | Endpoint | Firebase not configured | Firebase configured |
 |---|---|---|
-| `GET` records, apply runs, events, health | open | open (localhost only) |
+| `GET /api/health`, `GET /api/me` | open | open (`/api/me` answers "not signed in" without a token) |
+| `GET` records, apply runs, events | open | **sign-in required** (any verified email, employee or admin) or the shared `BG_ADMIN_TOKEN`: `401 sign_in_required` / `sign_in_invalid`, `403 email_unverified` |
 | `POST /api/records/{id}/report`, `/decision` | open (actor self-reported) | **sign-in required**: `401` without or with an invalid/expired token, `403` if the email is unverified |
 | `/api/admin/*` | shared `BG_ADMIN_TOKEN` | shared token **or** a Firebase sign-in whose verified email is in `BG_ADMIN_EMAILS`. A signed-in non-admin gets `403` |
 
@@ -255,7 +260,7 @@ Read-only views for an authorized operations lead. They are derived from the app
 - Neither configured: `403 forbidden` (fails closed). A Firebase project with an empty admin list grants admin to no one.
 - Missing or invalid credentials: `401 unauthorized` with `WWW-Authenticate: Bearer`.
 - A valid sign-in that isn't an admin, or has an unverified email: `403 forbidden`.
-- The shared token shows that *an* admin read the log, not which admin. The older `/api/records` and `/api/apply-runs` reads stay open.
+- The shared token shows that *an* admin read the log, not which admin. With Firebase configured, `/api/records` and `/api/apply-runs` reads need sign-in too; without it they stay open.
 
 ### AdminEvent
 ```json
@@ -267,7 +272,34 @@ Read-only views for an authorized operations lead. They are derived from the app
 `type`: `change_detected` · `explained` · `decision` · `review` · `run_started` · `run_finished` · `run_unfinished` · `resolved`. `actor_assurance` is `self-reported`, `local-os-user (not verified)`, `system`, or `google-account (verified sign-in)` for web actions made while signed in. The last one verifies who submitted an action, never who made the console change. `outcome` is set on `run_finished` and `run_unfinished` only. `run_unfinished` is derived for a run that has no recorded completion, and its outcome is **`unknown`**, never success. `plan_fingerprint` on `review` and `run_started` is the exact plan that was reviewed and then executed.
 
 ### `GET /api/admin/log`
-Newest first. Filters (all optional, AND): `engineer` (case-insensitive exact match on the event actor), `resource` (exact address), `since` / `until` (ISO 8601 **with timezone**, inclusive), `outcome` (a terminal run outcome or `unknown`; selects run results only), `limit` (1-500, default 100). Returns `{events, total_matching, limitations}`. Invalid filters are `422`.
+Newest first. Filters (all optional, AND): `engineer` (case-insensitive exact match on the event actor), `resource` (exact address), `since` / `until` (ISO 8601 **with timezone**, inclusive), `outcome` (a terminal run outcome or `unknown`; selects run results only), `type` (one event type: `change_detected`, `explained`, `decision`, `review`, `run_started`, `run_finished`, `run_unfinished`, `resolved`), `limit` (1-500, default 100). Returns `{events, total_matching, limitations}`. Invalid filters are `422`.
+
+### `GET /api/admin/overview`
+Admin only (same gate as the log). Query: `window` = `24h` (default) | `7d`; anything else is `422`. For the "Manual changes, before the next apply" page:
+```json
+{ "window": "24h", "generated_at": "…Z",
+  "open_records": 4, "open_without_reason": 2,
+  "needs_reason": [{ "record_id": "rec_…", "resource_address": "digitalocean_firewall.demo", "summary": "…", "first_detected_at": "…Z" }],
+  "last_scan": { "at": "…Z", "status": "ok" },
+  "last_run": { "run_id": "run_…", "outcome": "unknown", "at": "…Z" },
+  "events_by_type": { "explained": 4, "review": 1, "run_unfinished": 1 },
+  "run_outcomes": { "unknown": 1, "applied_no_warnings": 1 },
+  "activity": [{ "hour": "2026-11-08T03:00:00Z", "counts": { "explained": 1 } }],
+  "limitations": ["…", "Counts are events in the window, not incidents or downtime. …"] }
+```
+- `needs_reason`: open records with no reason, newest first. `last_scan`: this server's environment; `null` if never scanned.
+- `last_run`: the most recent wrapper run by time, finished or not. `unknown` means no completion was recorded and is never success.
+- `activity`: one bucket per UTC hour (24 or 168), oldest first, counts by event type.
+- **No per-person counts anywhere** (PRD non-goal: blame scores). Use the log's `engineer` filter to investigate one person's actions.
+
+### `GET /api/me`
+Which persona the UI should show. Display only: every route still enforces access itself.
+`200`: `{ "signed_in": bool, "email": str|null, "display_name": str|null, "role": "admin"|"employee"|null, "auth_mode": "firebase"|"shared-token"|"none" }`.
+- Verified Firebase email in `BG_ADMIN_EMAILS` → `admin`; any other verified email → `employee` (the same rule the admin routes enforce).
+- Shared `BG_ADMIN_TOKEN` → `admin` with `email: null`.
+- Firebase configured, no token → `signed_in: false`, `role: null`. Invalid token `401 sign_in_invalid`, unverified email `403 email_unverified`.
+- Firebase not configured → `auth_mode: "none"`, `role: null` (the UI shows its single, unsigned view).
+- Admins can still `POST` report/decision (an admin who was on call can explain their own change); the admin UI is read-only by design, not by server rule.
 
 ### `GET /api/admin/analytics`
 Admin only. Hourly counts of audit events for one environment. Required query: `environment`, `since`, `until` (ISO 8601 **with timezone**). The window is widened outward to whole UTC hours, must be at most 31 days, and the window actually used is returned as `since` / `until`. Returns `backend` (`timescaledb`, a real-time continuous aggregate, or `sqlite`, computed on request in offline mode), `bucket_size`, `buckets` (`start`, `total`, `by_kind`; empty hours are included as zeros), `totals` (`by_kind`, `by_intent`, `by_decision`, `by_outcome`), `generated_at`, `freshness` and `limitations`. It counts events, not incidents, and `unknown` outcomes are never merged into failures. Invalid windows are `422`; an unreachable database is `503` (`storage_unavailable`), never zero activity. On TimescaleDB a backfill behind the aggregate's refresh watermark is not visible until its window is refreshed.

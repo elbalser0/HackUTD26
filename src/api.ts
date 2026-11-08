@@ -341,8 +341,10 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Supplies a fresh Firebase ID token for writes (set by AuthProvider), or null
- * when nobody is signed in. Called per request, never cached here.
+ * Supplies a fresh Firebase ID token for reads and writes (set by AuthProvider),
+ * or null when nobody is signed in. Called per request, never cached here.
+ * The server requires it on every read and write when Firebase is configured;
+ * /api/health stays open and never gets it.
  */
 let tokenProvider: (() => Promise<string | null>) | null = null;
 export function setTokenProvider(fn: (() => Promise<string | null>) | null) {
@@ -380,16 +382,22 @@ async function getHealth(): Promise<Health | null> {
 const realAdapter: Adapter = {
   async listRecords() {
     const [w, health] = await Promise.all([
-      http<Wire>("/records"),
+      http<Wire>("/records", { headers: await signedInHeaders() }),
       getHealth(),
     ]);
     return { records: (w.records ?? []).map(fromWireRecord), health };
   },
   async getRecord(id) {
-    return fromWireRecord(await http(`/records/${encodeURIComponent(id)}`));
+    return fromWireRecord(
+      await http(`/records/${encodeURIComponent(id)}`, {
+        headers: await signedInHeaders(),
+      }),
+    );
   },
   async recordEvents(id) {
-    const w = await http<Wire>(`/records/${encodeURIComponent(id)}/events`);
+    const w = await http<Wire>(`/records/${encodeURIComponent(id)}/events`, {
+      headers: await signedInHeaders(),
+    });
     return (w.events ?? []).map(fromWireRecordEvent);
   },
   async report(id, b) {
@@ -416,7 +424,9 @@ const realAdapter: Adapter = {
   },
   async getApplyRun(id) {
     return fromWireApplyRun(
-      await http(`/apply-runs/${encodeURIComponent(id)}`),
+      await http(`/apply-runs/${encodeURIComponent(id)}`, {
+        headers: await signedInHeaders(),
+      }),
     );
   },
   // Bearer header only: a token is never put in a URL.

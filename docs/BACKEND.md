@@ -132,6 +132,7 @@ Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PA
 ## Credentials
 
 - The DigitalOcean token lives in `~/.secrets/digitalocean_token` (owner-only ACL), outside the repo. `tfrunner` reads it into the Terraform **child process environment only**, and only if `DIGITALOCEAN_TOKEN` isn't already set. It is never printed, logged or stored.
+- **Backend settings file:** `load_settings()` also reads the repo-root `.env` (path override `BG_DOTENV_FILE`; `BG_NO_DOTENV=1` disables it). Only keys starting with `BG_` are read; every other line, including `DIGITALOCEAN_TOKEN`, is skipped and never stored. A value already in the real environment wins. `os.environ` is not modified. Tests always opt out (`tests/conftest.py`) so a developer's `.env` cannot change results.
 - Never commit: `*.tfstate*`, `*.tfplan`, `*.tfvars`, `.terraform/`, `break-glass-infra/raw/`, `backend/*.db`, `.env`. All of these are gitignored. State and plans can contain sensitive values.
 
 ## Security hardening (from the independent review, 2026-11-07)
@@ -161,9 +162,18 @@ Verified OK by the reviewer:
 
 Open (by design or pending the spike):
 - A missing `resource_drift` key is treated as "no drift" (I2). Still unchecked: the real captures always had `resource_drift` present because of the provider noise.
-- The API is unauthenticated, local only.
+- Without Firebase configured the API is unauthenticated, local only. With it, reads and writes need a verified sign-in (or the shared admin token for reads and admin routes); `/api/health` stays open.
 
 ## Runbooks
+
+### CLI handoff (primary path)
+Reasons are captured in the terminal first. The dashboard is for visibility, and the web report form is the fallback.
+1. `breakglass scan` shows what Argus detected (resource and change), then asks **"Why was this change needed?"**, **"Your name"** (optional) and keep/revert/unsure. The reason is saved as self-reported (`source=cli`).
+2. Pressing Enter at the first question skips it. The record stays open and unexplained, and a later apply warning says "no reason recorded".
+3. A later `breakglass apply` that would undo the change shows that exact reason and name in its warning.
+4. If stdin is not an interactive terminal, the scan does not ask. It prints, per unexplained record, `breakglass report <id> --reason "..." --reporter "..."` instead of skipping silently. `--no-prompt` turns both off.
+
+Verified offline (`tests/test_cli_handoff.py`, authored fixtures and a fake Terraform runner). Not yet run end to end on real Terraform with the two-question prompt.
 
 ### Preflight (before the demo)
 1. `[bool](Test-Path $HOME\.secrets\digitalocean_token)` is True. Don't print the file.
@@ -185,7 +195,7 @@ Open (by design or pending the spike):
 Runs on **Daniel's machine** (the single operator: it holds the Terraform state, runs the backend and the UI).
 1. Baseline: `breakglass scan` should say 0 new (no drift).
 2. Console: add inbound tcp 8443 from `0.0.0.0/0, ::/0` to `break-glass-demo` (the "emergency fix").
-3. `breakglass scan` should give one `added` record and the one-line "name: reason" prompt. The refresh-only plan is never applied.
+3. `breakglass scan` should give one `added` record and the "Why was this change needed?" prompt. The refresh-only plan is never applied.
 4. Capture: `terraform plan -refresh-only -out=scan.tfplan` and `terraform plan -out=apply.tfplan`, each saved with `terraform show -json scan.tfplan > raw/scan.json` (`raw/` and `*.json` in that folder are gitignored). Send privately to Samuel to sanitize into `backend/tests/fixtures/real/`.
 5. `breakglass apply` shows the warning; choose keep or cancel (nothing applied). The apply run appears in the UI.
 

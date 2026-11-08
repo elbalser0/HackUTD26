@@ -13,6 +13,7 @@ from typing import Any
 from . import detector, matcher, rules
 from .db import Database, new_id, rule_from_json, rule_to_json, ts
 from .models import (
+    LastActivityOut,
     ChangeKind,
     CheckStatus,
     DecisionIn,
@@ -112,6 +113,44 @@ def record_out(row) -> RecordOut:
         last_check_at=row["last_check_at"],
         evidence_source=row["evidence_source"],
     )
+
+
+def _parse_ts(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def records_out(db: Database, rows) -> list[RecordOut]:
+    """Records for the web UI, with who explained them (assurance) and their last activity.
+    Derived from the append-only events table; nothing is written."""
+    by_record: dict[str, list] = {}
+    for e in db.list_all_events():  # oldest first
+        if e["record_id"]:
+            by_record.setdefault(e["record_id"], []).append(e)
+    out = []
+    for row in rows:
+        rec = record_out(row)
+        evs = by_record.get(row["id"], [])
+        reports = [e for e in evs if e["kind"] == "report"]
+        assurance = None
+        if row["reason"]:
+            assurance = reports[-1]["actor_assurance"] if reports else "self-reported"
+        candidates = [(_parse_ts(row["first_detected_at"]), "detected")]
+        candidates += [(_parse_ts(e["created_at"]), e["kind"]) for e in evs]
+        if row["resolution"] == "resolved":
+            candidates.append((_parse_ts(row["resolved_at"]), "resolved"))
+        last = None
+        for t, k in candidates:  # later entries win ties: events are in insertion order
+            if t is not None and (last is None or t >= last[0]):
+                last = (t, k)
+        out.append(rec.model_copy(update={
+            "reporter_assurance": assurance,
+            "last_activity": LastActivityOut(at=last[0], type=last[1]) if last else None}))
+    return out
 
 
 def candidate(row) -> MatchCandidate:

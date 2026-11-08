@@ -11,12 +11,17 @@ Nothing is invented. Whatever the data cannot show is declared in `limitations` 
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from .db import Database
 from .models import (
+    ActivityBucketOut,
     AdminEventOut,
     AdminLogOut,
+    LastRunOut,
+    LastScanOut,
+    NeedsReasonOut,
+    OverviewOut,
     RunOutcome,
     TimelineGap,
     TimelineOut,
@@ -34,6 +39,12 @@ LIMITATIONS = [
     "as predating event history.",
     "A successful apply does not prove the service is healthy.",
 ]
+
+EVENT_TYPES = ("change_detected", "explained", "decision", "review", "run_started", "run_finished",
+               "run_unfinished", "resolved")
+WINDOWS = {"24h": timedelta(hours=24), "7d": timedelta(days=7)}
+OVERVIEW_LIMITATION = ("Counts are events in the window, not incidents or downtime. Downtime attribution is "
+                       "unavailable: no incident or health evidence is linked.")
 
 _RANK = {"change_detected": 0, "explained": 1, "decision": 2, "review": 3, "run_started": 4,
          "run_unfinished": 5, "run_finished": 5, "resolved": 6}
@@ -164,7 +175,7 @@ class _View:
 
 def log(db: Database, *, engineer: str | None = None, resource: str | None = None,
         since: datetime | None = None, until: datetime | None = None,
-        outcome: RunOutcome | None = None, limit: int = 100) -> AdminLogOut:
+        outcome: RunOutcome | None = None, event_type: str | None = None, limit: int = 100) -> AdminLogOut:
     events = _View(db).events
     if engineer is not None:
         events = [e for e in events if e.actor and e.actor.casefold() == engineer.casefold()]
@@ -176,6 +187,8 @@ def log(db: Database, *, engineer: str | None = None, resource: str | None = Non
         events = [e for e in events if e.at <= until]
     if outcome is not None:
         events = [e for e in events if e.outcome == outcome]
+    if event_type is not None:
+        events = [e for e in events if e.type == event_type]
     events = events[::-1]  # newest first
     return AdminLogOut(events=events[:limit], total_matching=len(events), limitations=LIMITATIONS)
 
@@ -201,3 +214,52 @@ def timeline(db: Database, record_id: str) -> TimelineOut | None:
             gaps.append(TimelineGap(code="run_outcome_unknown", run_id=e.run_id,
                                     message=f"Run {e.run_id} has no recorded completion; do not assume it succeeded."))
     return TimelineOut(record_id=record_id, events=events, gaps=gaps, limitations=LIMITATIONS)
+
+
+def overview(db: Database, *, window: str, now: datetime, environment: str) -> OverviewOut:
+    """Admin overview: "manual changes, before the next apply". Read-only.
+    Counts are by event type and run outcome only, never by person (PRD non-goal: blame scores)."""
+    span = WINDOWS[window]
+    view = _View(db)
+    since = now - span
+    open_rows = [r for r in view.records.values() if r["resolution"] == "open"]
+    missing = sorted((r for r in open_rows if not r["reason"]), key=lambda r: r["first_detected_at"], reverse=True)
+    in_window = [e for e in view.events if since <= e.at <= now]
+
+    by_type: dict[str, int] = {}
+    outcomes: dict[str, int] = {}
+    for e in in_window:
+        by_type[e.type] = by_type.get(e.type, 0) + 1
+        if e.type in ("run_finished", "run_unfinished") and e.outcome is not None:
+            outcomes[e.outcome.value] = outcomes.get(e.outcome.value, 0) + 1
+
+    start = (now - span).astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    hours = int(span / timedelta(hours=1))
+    buckets = [ActivityBucketOut(hour=start + timedelta(hours=i), counts={}) for i in range(hours)]
+    for e in in_window:
+        i = int((e.at.astimezone(timezone.utc) - start) // timedelta(hours=1))
+        if 0 <= i < hours:
+            b = buckets[i].counts
+            b[e.type] = b.get(e.type, 0) + 1
+
+    runs = [e for e in view.events if e.type in ("run_finished", "run_unfinished") and e.run_id and e.at <= now]
+    last_run = None
+    if runs:
+        lr = runs[-1]
+        last_run = LastRunOut(run_id=lr.run_id, outcome=lr.outcome or RunOutcome.UNKNOWN, at=lr.at)
+
+    scan = db.last_scan(environment)
+    last_scan = None
+    if scan is not None:
+        try:
+            last_scan = LastScanOut(at=_dt(scan["started_at"]), status=scan["status"])
+        except (ValueError, TypeError):
+            last_scan = None
+
+    return OverviewOut(
+        window=window, generated_at=now, open_records=len(open_rows), open_without_reason=len(missing),
+        needs_reason=[NeedsReasonOut(record_id=r["id"], resource_address=r["resource_address"],
+                                     summary=r["summary"], first_detected_at=_dt(r["first_detected_at"]))
+                      for r in missing],
+        last_scan=last_scan, last_run=last_run, events_by_type=by_type, run_outcomes=outcomes,
+        activity=buckets, limitations=LIMITATIONS + [OVERVIEW_LIMITATION])
