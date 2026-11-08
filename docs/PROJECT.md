@@ -20,7 +20,7 @@ Build **Break-Glass Handoff** for the NMC² challenge at HackUTD 2026: capture a
 - Frontend: React + TypeScript + Vite in the repo root; npm lockfile committed. Read-only: it never runs Terraform and holds no secrets.
 - Backend: one Python FastAPI process, one SQLite file, one CLI (`backend/`). No microservices. Contract in `docs/API.md`.
 - Detector: Terraform refresh-only plan JSON; normal plan JSON supplies proposed actions. Coverage is only `digitalocean_firewall` → `inbound_rule`.
-- Provider and demo scenario (team-confirmed): DigitalOcean. Terraform in `break-glass-infra/` manages one firewall (`digitalocean_firewall.demo`) for an existing demo droplet; `attach_firewall` stays false until reviewed. The staged emergency change is **adding** an inbound rule (e.g. tcp 8443) in the console.
+- Provider and demo scenario: DigitalOcean firewall `digitalocean_firewall.demo` in `break-glass-infra/` (applied; not attached to the droplet). Terraform manages only the firewall; the droplet already existed. Proposed staged change, still to confirm as a team (PRD §10): **adding** an inbound rule (e.g. tcp 8443) in the console.
 - Single operator: Daniel's machine holds the Terraform state and runs Terraform, `breakglass` and the API. Never apply this config from a second machine (a second apply was already refused with `409 duplicate name`).
 - Authored (hand-written) data lives in environment `<env>-authored` and can never merge with or resolve live records.
 - Palette from https://nmc2.com/: black/white, blue `#2b9cfc`, Roboto. Our artwork is original CSS. Independent project, not an official NMC² product.
@@ -52,7 +52,7 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 
 ## Next decision gate
 
-1. Run the **real Terraform spike** on Daniel's machine against `break-glass-infra/`, with team approval at each step: baseline `breakglass scan`, add tcp 8443 in the console, `scan`, then `breakglass apply`. Capture sanitized real plan JSON into `backend/tests/fixtures/real/`.
+1. Finish the **real Terraform spike** on `break-glass-infra/` from Daniel's machine (partial: a real plan succeeded). Run a baseline `breakglass scan`, make the console edit, run `scan` again, then `breakglass apply`, and capture sanitized plan JSON into `backend/tests/fixtures/real/`. Needs explicit team approval for any cloud operation.
 2. Verify the detector direction against the capture and flip detector and fixtures together if wrong. Also verify the empty-saved-plan state-sync hypothesis.
 3. Run the apply-run view against a real `breakglass apply`, and check the 409 and 422 cases.
 4. Decide the admin log view scope (R9) and identity and authorization mechanism.
