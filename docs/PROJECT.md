@@ -44,7 +44,7 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 | R6 decision history without overwriting | Append-only `events` table (reports, decisions, wrapper reviews, run start/finish). Tested offline; actors are self-reported or the local OS user, not verified. |
 | R7 decision persisted before execution | The review, reviewer, rationale and exact plan fingerprint are saved in one transaction with the run marked `running` before Terraform runs; a failed write means nothing is applied. Tested with a mocked Terraform runner only. |
 | R8 outcomes, unknown when missing | Runs with no recorded completion become `unknown` (never success). Tested offline; not exercised against a real interrupted apply. |
-| R9 admin dashboard | Backend done: `/api/admin/log` and `/api/admin/records/{id}/timeline` read the events, with server-side bearer-token auth (one shared token via `BG_ADMIN_TOKEN`; fails closed; no per-admin identity). Tested on authored data. Dashboard UI not built. The older `/api/records` and `/api/apply-runs` endpoints remain unauthenticated (open decision). |
+| R9 admin dashboard | Backend done: `/api/admin/log` and `/api/admin/records/{id}/timeline` read the events, with server-side bearer-token auth (one shared token via `BG_ADMIN_TOKEN`; fails closed; no per-admin identity). Tested on authored data. Dashboard UI built (`#/admin`), tested with stub adapters and checked at 375px on fixture data; not yet exercised against the real backend. The older `/api/records` and `/api/apply-runs` endpoints remain unauthenticated (open decision). |
 | R10 history preserved | Append-style history in SQLite. Not audit-grade. |
 | R11 verified closure | Verified on real Terraform (2026-11-07): after the console rule was deleted, `breakglass recheck` resolved the real record as `verified_aligned` and its history stayed intact (change, runs, explanation, review, resolution). The first real recheck had stayed open because the provider reports `droplet_ids`/`tags` as null in state and `[]` live; fixed (null and empty collections compare equal) and covered by a replay test. |
 | R12 suggested manual edit | Done for a single literal value. Never auto-patches. |
@@ -55,7 +55,7 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 1. Remaining spike work on `break-glass-infra/` (Daniel's machine; each cloud step needs team approval), optional: a confirmed revert/override apply (reviewed plan executed, changed plan aborted) and the keep-path state sync. Real findings so far are recorded above and in `backend/tests/fixtures/real/README.md`.
 2. Not yet seen: a drift-free refresh-only plan (the provider noise kept `resource_drift` present). Re-check that a missing `resource_drift` key is still treated safely once one is captured.
 3. Check the 409 and 422 UI cases against the real backend.
-4. Build the admin dashboard UI over the admin log API, and decide per-admin identity (the token is shared) and whether the older read endpoints should also require authorization.
+4. Exercise the admin dashboard against the real backend, and decide per-admin identity (the token is shared) and whether the older read endpoints should also require authorization.
 5. Decide whether analytics fits the hackathon release or follows the core demo.
 
 ## Provenance

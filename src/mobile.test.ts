@@ -40,6 +40,7 @@ const px = (v: string | undefined) => (v?.endsWith("px") ? parseFloat(v) : NaN);
 
 test.each([
   "nav button",
+  "nav a",
   ".btn",
   ".wordmark",
   ".detail > a:first-child",

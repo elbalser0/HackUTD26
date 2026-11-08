@@ -97,6 +97,56 @@ export interface ApplyRun {
   completedAt: string | null;
 }
 
+export type AdminEventType =
+  | "change_detected"
+  | "explained"
+  | "decision"
+  | "review"
+  | "run_started"
+  | "run_finished"
+  | "run_unfinished"
+  | "resolved";
+/** A terminal run outcome, or "unknown" (no completion recorded; NOT the same as failed). */
+export type RunOutcome = AckOutcome | "unknown";
+
+export interface AdminEvent {
+  at: string;
+  type: AdminEventType;
+  environment: string;
+  recordIds: string[];
+  runId: string | null;
+  resourceAddresses: string[];
+  actor: string | null;
+  /** "self-reported" | "local-os-user (not verified)" | "system": never a verified identity. */
+  actorAssurance: string;
+  outcome: RunOutcome | null;
+  planFingerprint: string | null;
+  detail: string | null;
+}
+export interface AdminLog {
+  events: AdminEvent[];
+  totalMatching: number;
+  limitations: string[];
+}
+export interface TimelineGap {
+  code: string;
+  message: string;
+  runId: string | null;
+}
+export interface Timeline {
+  recordId: string;
+  events: AdminEvent[];
+  gaps: TimelineGap[];
+  limitations: string[];
+}
+export interface AdminFilters {
+  engineer?: string;
+  resource?: string;
+  outcome?: RunOutcome;
+  since?: string; // ISO 8601 with timezone
+  until?: string;
+}
+
 export interface Adapter {
   listRecords(): Promise<RecordList>;
   getRecord(id: string): Promise<EmergencyRecord>;
@@ -106,6 +156,9 @@ export interface Adapter {
   ): Promise<EmergencyRecord>;
   decide(id: string, intent: Intent, note?: string): Promise<EmergencyRecord>;
   getApplyRun(id: string): Promise<ApplyRun>;
+  /** The token is passed per call and held by the caller in memory only. */
+  adminLog(token: string, filters: AdminFilters): Promise<AdminLog>;
+  adminTimeline(token: string, recordId: string): Promise<Timeline>;
 }
 
 export class ApiError extends Error {
@@ -184,6 +237,43 @@ export function fromWireApplyRun(w: Wire): ApplyRun {
     ackOutcome: w.ack_outcome,
     ackNote: w.ack_note ?? null,
     completedAt: w.completed_at ?? null,
+  };
+}
+
+function fromWireAdminEvent(w: Wire): AdminEvent {
+  return {
+    at: w.at,
+    type: w.type,
+    environment: w.environment,
+    recordIds: w.record_ids ?? [],
+    runId: w.run_id ?? null,
+    resourceAddresses: w.resource_addresses ?? [],
+    actor: w.actor ?? null,
+    actorAssurance: w.actor_assurance ?? "system",
+    outcome: w.outcome ?? null,
+    planFingerprint: w.plan_fingerprint ?? null,
+    detail: w.detail ?? null,
+  };
+}
+
+export function fromWireAdminLog(w: Wire): AdminLog {
+  return {
+    events: (w.events ?? []).map(fromWireAdminEvent),
+    totalMatching: w.total_matching ?? 0,
+    limitations: w.limitations ?? [],
+  };
+}
+
+export function fromWireTimeline(w: Wire): Timeline {
+  return {
+    recordId: w.record_id,
+    events: (w.events ?? []).map(fromWireAdminEvent),
+    gaps: (w.gaps ?? []).map((g: Wire) => ({
+      code: g.code,
+      message: g.message,
+      runId: g.run_id ?? null,
+    })),
+    limitations: w.limitations ?? [],
   };
 }
 
@@ -267,6 +357,24 @@ const realAdapter: Adapter = {
   async getApplyRun(id) {
     return fromWireApplyRun(
       await http(`/apply-runs/${encodeURIComponent(id)}`),
+    );
+  },
+  // Bearer header only: a token is never put in a URL.
+  async adminLog(token, f) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);
+    const qs = q.toString();
+    return fromWireAdminLog(
+      await http(`/admin/log${qs ? `?${qs}` : ""}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    );
+  },
+  async adminTimeline(token, id) {
+    return fromWireTimeline(
+      await http(`/admin/records/${encodeURIComponent(id)}/timeline`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
     );
   },
 };

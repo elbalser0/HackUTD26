@@ -5,6 +5,10 @@
  * Fake names; in-memory; resets on reload.
  */
 import type {
+  AdminEvent,
+  AdminFilters,
+  AdminLog,
+  Timeline,
   Adapter,
   ApplyRun,
   EmergencyRecord,
@@ -144,4 +148,127 @@ export const fixtureAdapter: Adapter = {
       completedAt: null,
     };
   },
+  async adminLog(token, f: AdminFilters): Promise<AdminLog> {
+    await gate();
+    checkToken(token);
+    const events = adminEvents().filter(
+      (e) =>
+        (!f.engineer || e.actor?.toLowerCase() === f.engineer.toLowerCase()) &&
+        (!f.resource || e.resourceAddresses.includes(f.resource)) &&
+        (!f.outcome || e.outcome === f.outcome) &&
+        (!f.since || e.at >= f.since) &&
+        (!f.until || e.at <= f.until),
+    );
+    return {
+      events: events.reverse(),
+      totalMatching: events.length,
+      limitations: FIXTURE_LIMITATIONS,
+    };
+  },
+  async adminTimeline(token, id): Promise<Timeline> {
+    await gate();
+    checkToken(token);
+    find(id);
+    const events = adminEvents().filter((e) => e.recordIds.includes(id));
+    return {
+      recordId: id,
+      events,
+      gaps: [
+        {
+          code: "run_outcome_unknown",
+          message:
+            "Run run_fixture_2 has no recorded completion; do not assume it succeeded.",
+          runId: "run_fixture_2",
+        },
+      ],
+      limitations: FIXTURE_LIMITATIONS,
+    };
+  },
 };
+
+/** Fixture admin token is "demo" (?fixture=admin-unconfigured simulates a server with no token set). */
+function checkToken(token: string) {
+  if (scenario() === "admin-unconfigured")
+    throw new ApiError("Admin access is not configured", 403, "forbidden");
+  if (token !== "demo")
+    throw new ApiError(
+      "Missing or invalid admin credentials",
+      401,
+      "unauthorized",
+    );
+}
+
+const FIXTURE_LIMITATIONS = [
+  "FIXTURE DATA — not from a backend.",
+  "Actors are not verified identities: reporters are self-reported, and a wrapper reviewer is either self-reported or the local OS user (not verified).",
+  "Admin access uses one shared token: it shows that an admin read the log, not which admin.",
+  "A run with no recorded completion is shown as unknown: it may have been interrupted, crashed, or still be running. Unknown is not the same as failed, and never means success.",
+];
+
+function adminEvents(): AdminEvent[] {
+  const e = (
+    o: Partial<AdminEvent> & Pick<AdminEvent, "at" | "type">,
+  ): AdminEvent => ({
+    environment: "demo-authored",
+    recordIds: ["rec_demo_1"],
+    runId: null,
+    resourceAddresses: ["digitalocean_firewall.web"],
+    actor: null,
+    actorAssurance: "system",
+    outcome: null,
+    planFingerprint: null,
+    detail: null,
+    ...o,
+  });
+  return [
+    e({
+      at: ago(26 * 60),
+      type: "change_detected",
+      detail: "inbound tcp port 8080 changed live to port 8443",
+    }),
+    e({
+      at: ago(25 * 60),
+      type: "explained",
+      actor: "Paul (demo)",
+      actorAssurance: "self-reported",
+      detail: "payment webhook blocked, opened 8443",
+    }),
+    e({
+      at: ago(120),
+      type: "review",
+      actor: "Dana (demo)",
+      actorAssurance: "self-reported",
+      runId: "run_fixture_1",
+      planFingerprint: "sha256:fixture",
+      detail: "decision: revert — webhook fixed upstream",
+    }),
+    e({
+      at: ago(119),
+      type: "run_started",
+      actor: "Dana (demo)",
+      actorAssurance: "self-reported",
+      runId: "run_fixture_1",
+      planFingerprint: "sha256:fixture",
+      detail: "terraform apply started after decision: revert",
+    }),
+    e({
+      at: ago(118),
+      type: "run_finished",
+      actor: "Dana (demo)",
+      actorAssurance: "self-reported",
+      runId: "run_fixture_1",
+      outcome: "reverted_applied",
+      detail: "outcome: reverted_applied",
+    }),
+    e({
+      at: ago(40),
+      type: "run_unfinished",
+      actor: "alice",
+      actorAssurance: "local-os-user (not verified)",
+      runId: "run_fixture_2",
+      outcome: "unknown",
+      detail:
+        "No completion recorded; the run may have been interrupted or crashed, or may still be running. Do not assume it succeeded.",
+    }),
+  ];
+}
