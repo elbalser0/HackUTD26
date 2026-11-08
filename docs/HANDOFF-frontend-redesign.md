@@ -6,7 +6,7 @@ project handoff and still describes the pre-redesign UI.
 
 ## 1. Where things stand
 
-Branch `feat/tiger-cloud`, **8 commits ahead of `origin/main` (the last is this handoff), nothing pushed, tree clean**. Main (PRs #23 to #25: CLI
+Branch `feat/tiger-cloud`, **pushed, and open as one PR: https://github.com/elbalser0/HackUTD26/pull/26 (into `main`)**. Tree clean when this was written. Main (PRs #23 to #25: CLI
 polish, dotenv, personas backend) is already merged in.
 
 | Commit | What |
@@ -125,7 +125,7 @@ chart hours do not line up with the fixture events, so clicking a bar shows 0 ma
 - Employee visibility: all open records (built) or only ones they reported? Reports are self-declared, so "mine" is not trustworthy.
 - Admin palette: is client-side search over the first 100 loaded events acceptable, or do they want server-side `q` now?
 - Should the Overview KPIs link to All records / Events (targets exist now)?
-- Push and PR: **decided, one PR** for the whole branch (Tiger backend + UI redesign). Do not split it. It has NOT been pushed or opened yet; do that only when the user asks, branching/merging per section 2 (`gh pr merge --merge`).
+- Push and PR: **done, one PR (#26)** for the whole branch (Tiger backend + UI redesign). Do not split it. Further commits on `feat/tiger-cloud` go into that PR; push only when the user asks. Merge only when asked (`gh pr merge --merge`).
 
 ## 7. How to run things
 - API against Tiger (user runs it, from repo root): `! set -a && . ./.env && set +a && cd backend && .venv/bin/uvicorn breakglass.api:app --port 8000`
