@@ -118,7 +118,9 @@ breakglass reset-db --yes
 breakglass demo-reset [--yes] [--skip-cloud-check]   # wipe demo data + read-only preflight (never changes the cloud)
 ```
 
-Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`).
+Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`), `BG_ADMIN_TOKEN` (shared admin fallback; secret), `BG_FIREBASE_PROJECT_ID` (public; turns on sign-in for web writes and Firebase admin), `BG_ADMIN_EMAILS` (comma-separated admin Google emails).
+
+**Rollout order for sign-in:** set `BG_FIREBASE_PROJECT_ID` on the operator machine only **after** the UI sends Firebase ID tokens. Until then the UI's report and decision forms would get `401`.
 
 ## Infrastructure and operator
 
