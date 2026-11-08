@@ -191,3 +191,11 @@
 .pal-more { padding: 6px 12px 0; }
 .search-btn { min-height: 44px; cursor: pointer; }
 @media (max-width: 720px) { .pal-backdrop { padding-top: 16px; } }
+
+/* Admin overview additions. */
+.ar .k-other { background: #3a4350; }
+.ar .chart.dense { gap: 1px; }
+.ar .axis.dense { gap: 1px; }
+.ar .axis.dense span { overflow: visible; white-space: nowrap; text-align: left; }
+.ar .side .brand img { display: block; width: 120px; height: auto; }
+.ar .kpi .note { min-height: 18px; }

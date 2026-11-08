@@ -101,6 +101,9 @@ function stub(o: Partial<Adapter>): Adapter {
     getRecord: async () => {
       throw new Error("unused");
     },
+    adminOverview: async () => {
+      throw new Error("unused");
+    },
     me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     report: async () => {
@@ -119,7 +122,8 @@ function stub(o: Partial<Adapter>): Adapter {
 }
 
 async function signIn(token = "s3cret") {
-  fireEvent.change(screen.getByLabelText(/admin token/i), {
+  // the gate appears once /api/me has answered "not an admin"
+  fireEvent.change(await screen.findByLabelText(/admin token/i), {
     target: { value: token },
   });
   fireEvent.click(
@@ -181,7 +185,7 @@ test("gate: no request is made and no data shown until a token is entered; token
   const adminLog = vi.fn(async (_t: string, _f: AdminFilters) => log());
   setAdapter(stub({ adminLog }));
   render(<App />);
-  const input = screen.getByLabelText(/admin token/i);
+  const input = await screen.findByLabelText(/admin token/i);
   expect(input).toHaveAttribute("type", "password");
   expect(adminLog).not.toHaveBeenCalled();
   expect(screen.queryByText(/webhook fixed upstream/)).toBeNull();

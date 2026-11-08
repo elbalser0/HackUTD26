@@ -167,6 +167,29 @@ export interface RecordEvent {
   data: Record<string, unknown>;
 }
 
+export type OverviewWindow = "24h" | "7d";
+
+/** GET /api/admin/overview. Counts are by event type and outcome, never by person. */
+export interface Overview {
+  window: OverviewWindow;
+  generatedAt: string;
+  openRecords: number;
+  openWithoutReason: number;
+  needsReason: {
+    recordId: string;
+    resourceAddress: string;
+    summary: string;
+    firstDetectedAt: string;
+  }[];
+  lastScan: { at: string; status: string } | null;
+  /** "unknown" = no completion recorded; NOT the same as failed, never success. */
+  lastRun: { runId: string; outcome: RunOutcome; at: string } | null;
+  eventsByType: Record<string, number>;
+  runOutcomes: Record<string, number>;
+  activity: { hour: string; counts: Record<string, number> }[];
+  limitations: string[];
+}
+
 export type Role = "admin" | "employee";
 export type AuthMode = "firebase" | "shared-token" | "none";
 
@@ -180,6 +203,8 @@ export interface Me {
 }
 
 export interface Adapter {
+  /** Admin only. Sends the signed-in ID token; the server decides access. */
+  adminOverview(window: OverviewWindow): Promise<Overview>;
   /** Which persona to show. Never a substitute for server-side checks. */
   me(): Promise<Me>;
   /** Every record, open and resolved; the UI buckets them. */
@@ -273,6 +298,29 @@ export function fromWireApplyRun(w: Wire): ApplyRun {
     ackOutcome: w.ack_outcome,
     ackNote: w.ack_note ?? null,
     completedAt: w.completed_at ?? null,
+  };
+}
+
+export function fromWireOverview(w: Wire): Overview {
+  return {
+    window: w.window,
+    generatedAt: w.generated_at,
+    openRecords: w.open_records ?? 0,
+    openWithoutReason: w.open_without_reason ?? 0,
+    needsReason: (w.needs_reason ?? []).map((n: Wire) => ({
+      recordId: n.record_id,
+      resourceAddress: n.resource_address,
+      summary: n.summary,
+      firstDetectedAt: n.first_detected_at,
+    })),
+    lastScan: w.last_scan ? { at: w.last_scan.at, status: w.last_scan.status } : null,
+    lastRun: w.last_run
+      ? { runId: w.last_run.run_id, outcome: w.last_run.outcome, at: w.last_run.at }
+      : null,
+    eventsByType: w.events_by_type ?? {},
+    runOutcomes: w.run_outcomes ?? {},
+    activity: (w.activity ?? []).map((b: Wire) => ({ hour: b.hour, counts: b.counts ?? {} })),
+    limitations: w.limitations ?? [],
   };
 }
 
@@ -405,6 +453,13 @@ async function getHealth(): Promise<Health | null> {
 }
 
 const realAdapter: Adapter = {
+  async adminOverview(window) {
+    return fromWireOverview(
+      await http(`/admin/overview?window=${window}`, {
+        headers: await signedInHeaders(),
+      }),
+    );
+  },
   async me() {
     return fromWireMe(await http("/me", { headers: await signedInHeaders() }));
   },

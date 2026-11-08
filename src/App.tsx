@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
-import { usingFixtures } from "./api";
+import type { ReactNode } from "react";
+import { api, usingFixtures } from "./api";
+import { useAuth } from "./auth";
+import { useAsync } from "./useAsync";
 import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
+import { AdminShell } from "./components/AdminShell";
+import { Overview } from "./components/Overview";
+import { Loading } from "./components/States";
 import { AdminArea } from "./components/Admin";
 import { ApplyRunView } from "./components/ApplyRunView";
 import { PaletteProvider } from "./components/PaletteContext";
@@ -19,40 +25,19 @@ function useHashPath() {
   return h;
 }
 
-function App() {
-  const path = useHashPath();
-  const rec = path.match(/^\/records\/([^/]+)$/);
-  const run = path.match(/^\/apply\/([^/]+)$/);
-  const admin = path === "/admin" || /^\/admin\/records\/[^/]+$/.test(path);
-  const employee = !admin && !run;
-  const crumb = admin
-    ? "Admin log"
-    : run
-      ? "Apply warning"
-      : rec
-        ? "Record"
-        : "Open records";
-  if (employee)
-    return (
-      <AuthProvider>
-        <AuthGate>
-          <PaletteProvider>
-          <div className="ar">
-            <a className="skip" href="#main">
-              Skip to content
-            </a>
-            <TopBar />
-            <main id="main" className="content" style={{ maxWidth: "none" }}>
-              <RecordsPage routeId={rec ? decodeURIComponent(rec[1]) : null} />
-            </main>
-          </div>
-          </PaletteProvider>
-        </AuthGate>
-      </AuthProvider>
-    );
+/** The original layout, still used by the apply-run page and the token-gated admin screens. */
+function LegacyLayout({
+  crumb,
+  admin,
+  run,
+  children,
+}: {
+  crumb: string;
+  admin: boolean;
+  run: boolean;
+  children: ReactNode;
+}) {
   return (
-    <AuthProvider>
-    <AuthGate>
     <div className="app">
       <a className="skip" href="#main">
         Skip to content
@@ -106,11 +91,7 @@ function App() {
           </span>
         </header>
         <main id="main">
-          {admin ? (
-            <AdminArea path={path} />
-          ) : (
-            <ApplyRunView key={run![1]} id={decodeURIComponent(run![1])} />
-          )}
+          {children}
         </main>
         <footer>
           <span>
@@ -122,7 +103,89 @@ function App() {
         </footer>
       </div>
     </div>
-    </AuthGate>
+  );
+}
+
+/**
+ * #/admin. /api/me only picks the layout: an admin gets the new Overview; anyone
+ * else, or any failure, gets the existing token-gated screen. The server still
+ * enforces access on every admin route.
+ */
+function AdminHome({ path }: { path: string }) {
+  const { user } = useAuth();
+  const { s } = useAsync(() => api.me(), [user?.email]);
+  if (s.state === "loading")
+    return (
+      <div className="ar">
+        <main id="main" className="content">
+          <Loading what="account" />
+        </main>
+      </div>
+    );
+  if (path === "/admin" && s.state === "ok" && s.data.role === "admin")
+    return (
+      <AdminShell crumb="Overview">
+        <Overview />
+      </AdminShell>
+    );
+  return (
+    <LegacyLayout crumb="Admin log" admin run={false}>
+      <AdminArea path={path} />
+    </LegacyLayout>
+  );
+}
+
+function App() {
+  const path = useHashPath();
+  const rec = path.match(/^\/records\/([^/]+)$/);
+  const run = path.match(/^\/apply\/([^/]+)$/);
+  const admin = path === "/admin" || /^\/admin\/records\/[^/]+$/.test(path);
+  const employee = !admin && !run;
+  const crumb = admin
+    ? "Admin log"
+    : run
+      ? "Apply warning"
+      : rec
+        ? "Record"
+        : "Open records";
+  // Same element for #/admin and a record timeline, so the token held in AdminArea survives navigation.
+  if (admin)
+    return (
+      <AuthProvider>
+        <AuthGate>
+          <AdminHome path={path} />
+        </AuthGate>
+      </AuthProvider>
+    );
+  if (employee)
+    return (
+      <AuthProvider>
+        <AuthGate>
+          <PaletteProvider>
+          <div className="ar">
+            <a className="skip" href="#main">
+              Skip to content
+            </a>
+            <TopBar />
+            <main id="main" className="content" style={{ maxWidth: "none" }}>
+              <RecordsPage routeId={rec ? decodeURIComponent(rec[1]) : null} />
+            </main>
+          </div>
+          </PaletteProvider>
+        </AuthGate>
+      </AuthProvider>
+    );
+  return (
+    <AuthProvider>
+      <AuthGate>
+        <LegacyLayout crumb={crumb} admin={admin} run={!!run}>
+          {admin ? (
+            <AdminArea path={path} />
+          ) : (
+            <ApplyRunView key={run![1]} id={decodeURIComponent(run![1])} />
+          )}
+        </LegacyLayout>
+      </AuthGate>
     </AuthProvider>
   );
 }

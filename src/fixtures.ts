@@ -87,6 +87,47 @@ const gate = async () => {
 };
 
 export const fixtureAdapter: Adapter = {
+  /** Fake numbers for ?fixture=admin; derived from the fixture records so the page is coherent. */
+  async adminOverview(window) {
+    await gate();
+    const open = records.filter((r) => r.resolution === "open");
+    const missing = open.filter((r) => r.reason === null);
+    const hours = window === "7d" ? 168 : 24;
+    const top = new Date();
+    top.setUTCMinutes(0, 0, 0);
+    const activity = Array.from({ length: hours }, (_, i) => {
+      const counts: Record<string, number> =
+        i === hours - 6
+          ? { explained: 2, review: 1, run_unfinished: 1 }
+          : i === hours - 1
+            ? { explained: 1 }
+            : {};
+      return {
+        hour: new Date(top.getTime() - (hours - 1 - i) * 3_600_000).toISOString(),
+        counts,
+      };
+    });
+    return {
+      window,
+      generatedAt: ago(0),
+      openRecords: open.length,
+      openWithoutReason: missing.length,
+      needsReason: missing.map((r) => ({
+        recordId: r.id,
+        resourceAddress: r.resourceAddress,
+        summary: r.summary,
+        firstDetectedAt: r.firstDetectedAt,
+      })),
+      lastScan: { at: ago(4), status: "ok" },
+      lastRun: { runId: "run_fixture", outcome: "unknown" as const, at: ago(300) },
+      eventsByType: { explained: 3, review: 1, run_unfinished: 1 },
+      runOutcomes: { unknown: 1 },
+      activity,
+      limitations: [
+        "Fixture data: these numbers are made up. Counts are events in the window, not incidents or downtime.",
+      ],
+    };
+  },
   /** ?fixture=admin shows the admin persona; any other fixture is an employee. */
   async me() {
     return {

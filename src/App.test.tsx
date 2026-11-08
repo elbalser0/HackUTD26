@@ -68,6 +68,9 @@ function stub(o: Partial<Adapter>): Adapter {
         reportedAt: "2026-11-08T03:31:40Z",
       }),
     decide: async (_i, intent) => rec({ intent }),
+    adminOverview: async () => {
+      throw new Error("unused");
+    },
     me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     getApplyRun: async () => run(),
