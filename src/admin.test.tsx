@@ -101,6 +101,7 @@ function stub(o: Partial<Adapter>): Adapter {
     getRecord: async () => {
       throw new Error("unused");
     },
+    recordEvents: async () => [],
     report: async () => {
       throw new Error("unused");
     },
@@ -449,14 +450,14 @@ test("real adapter: bearer header, filters in query, token never in URL; timelin
   for (const c of calls) expect(c.url).not.toContain("tok123");
 });
 
-test("the existing records list still has no admin data and the nav links to the admin log", async () => {
+test("the employee page shows no admin navigation and never reads the admin log", async () => {
   window.location.hash = "#/";
-  setAdapter(stub({}));
+  const adminLog = vi.fn(async () => log());
+  setAdapter(stub({ adminLog }));
   render(<App />);
-  expect(screen.getByRole("link", { name: /admin log/i })).toHaveAttribute(
-    "href",
-    "#/admin",
-  );
+  await screen.findByRole("heading", { name: "Manual changes" });
+  expect(screen.queryByRole("link", { name: /admin/i })).toBeNull();
+  expect(adminLog).not.toHaveBeenCalled();
 });
 
 const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;

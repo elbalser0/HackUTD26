@@ -98,6 +98,32 @@ export const fixtureAdapter: Adapter = {
       health: { status: "ok", db: "ok", environment: "demo", time: ago(0) },
     };
   },
+  async recordEvents(id) {
+    await gate();
+    const r = find(id);
+    return [
+      {
+        id: `${id}_detected`,
+        kind: "change_detected",
+        actor: null,
+        actorAssurance: "system",
+        at: r.firstDetectedAt,
+        data: {},
+      },
+      ...(r.reportedAt
+        ? [
+            {
+              id: `${id}_report`,
+              kind: "report",
+              actor: r.reporter,
+              actorAssurance: "self-reported",
+              at: r.reportedAt,
+              data: {},
+            },
+          ]
+        : []),
+    ];
+  },
   async getRecord(id) {
     await gate();
     return clone(find(id));

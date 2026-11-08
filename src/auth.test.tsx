@@ -96,6 +96,7 @@ function stub(o: Partial<Adapter> = {}): Adapter {
     getRecord: async () => rec(),
     report: async (_i, b) => rec({ reporter: b.reporter, reason: b.reason }),
     decide: async (_i, intent) => rec({ intent }),
+    recordEvents: async () => [],
     getApplyRun: async () => {
       throw new Error("unused");
     },
@@ -126,7 +127,7 @@ test("not configured: no sign-in UI at all", async () => {
   setAuthClient(null);
   setAdapter(stub());
   render(<App />);
-  await screen.findByText("digitalocean_firewall.demo");
+  await screen.findByRole("region", { name: "digitalocean_firewall.demo" });
   expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
   expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull();
 });
@@ -164,7 +165,9 @@ test("signing in from the sign-in page opens the app with the account bar", asyn
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /sign in with google/i }));
   expect(auth.signIn).toHaveBeenCalledTimes(1);
-  expect(await screen.findByText("digitalocean_firewall.demo")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("region", { name: "digitalocean_firewall.demo" }),
+  ).toBeInTheDocument();
   expect(screen.getByText("dana@example.com")).toBeInTheDocument();
   expect(screen.queryByText(/verified google account/i)).toBeNull();
 });
@@ -284,12 +287,8 @@ test("report form: says which verified account will save it", async () => {
   setAdapter(stub());
   window.location.hash = "#/records/r1";
   render(<App />);
-  const line = await screen.findByText(
-    (_t, el) =>
-      el?.tagName === "P" &&
-      /^Saving as dana@example\.com/.test(el.textContent ?? ""),
-  );
-  expect(line).toHaveTextContent(/not proof of who made the change/i);
+  const line = await screen.findByText(/^Saving as dana@example\.com/);
+  expect(line).toHaveTextContent(/not who made the change/i);
 });
 
 test("401 on report (expired sign-in): asks to sign in again and keeps the text", async () => {

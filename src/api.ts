@@ -156,8 +156,21 @@ export interface AdminFilters {
   until?: string;
 }
 
+/** One entry in a record's append-only history (report, decision, review...). */
+export interface RecordEvent {
+  id: string;
+  kind: string;
+  actor: string | null;
+  /** "self-reported" | "local-os-user (not verified)" | "system" | verified Google account. */
+  actorAssurance: string;
+  at: string;
+  data: Record<string, unknown>;
+}
+
 export interface Adapter {
+  /** Every record, open and resolved; the UI buckets them. */
   listRecords(): Promise<RecordList>;
+  recordEvents(id: string): Promise<RecordEvent[]>;
   getRecord(id: string): Promise<EmergencyRecord>;
   report(
     id: string,
@@ -246,6 +259,17 @@ export function fromWireApplyRun(w: Wire): ApplyRun {
     ackOutcome: w.ack_outcome,
     ackNote: w.ack_note ?? null,
     completedAt: w.completed_at ?? null,
+  };
+}
+
+export function fromWireRecordEvent(w: Wire): RecordEvent {
+  return {
+    id: w.id,
+    kind: w.kind,
+    actor: w.actor ?? null,
+    actorAssurance: w.actor_assurance ?? "system",
+    at: w.created_at,
+    data: w.data ?? {},
   };
 }
 
@@ -356,13 +380,17 @@ async function getHealth(): Promise<Health | null> {
 const realAdapter: Adapter = {
   async listRecords() {
     const [w, health] = await Promise.all([
-      http<Wire>("/records?resolution=open"),
+      http<Wire>("/records"),
       getHealth(),
     ]);
     return { records: (w.records ?? []).map(fromWireRecord), health };
   },
   async getRecord(id) {
     return fromWireRecord(await http(`/records/${encodeURIComponent(id)}`));
+  },
+  async recordEvents(id) {
+    const w = await http<Wire>(`/records/${encodeURIComponent(id)}/events`);
+    return (w.events ?? []).map(fromWireRecordEvent);
   },
   async report(id, b) {
     return fromWireRecord(

@@ -3,9 +3,9 @@ import { usingFixtures } from "./api";
 import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
 import { AdminArea } from "./components/Admin";
 import { ApplyRunView } from "./components/ApplyRunView";
-import { RecordDetail } from "./components/RecordDetail";
-import { RecordList } from "./components/RecordList";
+import { RecordsPage } from "./components/Records";
 import "./App.css";
+import "./argus.css";
 
 function useHashPath() {
   const [h, setH] = useState(() => window.location.hash.slice(1) || "/");
@@ -22,6 +22,7 @@ function App() {
   const rec = path.match(/^\/records\/([^/]+)$/);
   const run = path.match(/^\/apply\/([^/]+)$/);
   const admin = path === "/admin" || /^\/admin\/records\/[^/]+$/.test(path);
+  const employee = !admin && !run;
   const crumb = admin
     ? "Admin log"
     : run
@@ -29,6 +30,32 @@ function App() {
       : rec
         ? "Record"
         : "Open records";
+  if (employee)
+    return (
+      <AuthProvider>
+        <AuthGate>
+          <div className="ar">
+            <a className="skip" href="#main">
+              Skip to content
+            </a>
+            <header className="top">
+              <a className="brand" href="#/" aria-label="Argus home">
+                <img src="/argus-logo.svg" alt="" />
+              </a>
+              <div className="top-right">
+                {usingFixtures && (
+                  <span className="chip">DEV FIXTURE DATA, NOT A BACKEND</span>
+                )}
+                <AccountBar />
+              </div>
+            </header>
+            <main id="main" className="content" style={{ maxWidth: "none" }}>
+              <RecordsPage routeId={rec ? decodeURIComponent(rec[1]) : null} />
+            </main>
+          </div>
+        </AuthGate>
+      </AuthProvider>
+    );
   return (
     <AuthProvider>
     <AuthGate>
@@ -87,12 +114,8 @@ function App() {
         <main id="main">
           {admin ? (
             <AdminArea path={path} />
-          ) : rec ? (
-            <RecordDetail key={rec[1]} id={decodeURIComponent(rec[1])} />
-          ) : run ? (
-            <ApplyRunView key={run[1]} id={decodeURIComponent(run[1])} />
           ) : (
-            <RecordList />
+            <ApplyRunView key={run![1]} id={decodeURIComponent(run![1])} />
           )}
         </main>
         <footer>

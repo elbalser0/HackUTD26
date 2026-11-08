@@ -68,6 +68,7 @@ function stub(o: Partial<Adapter>): Adapter {
         reportedAt: "2026-11-08T03:31:40Z",
       }),
     decide: async (_i, intent) => rec({ intent }),
+    recordEvents: async () => [],
     getApplyRun: async () => run(),
     adminLog: async () => ({ events: [], totalMatching: 0, limitations: [] }),
     adminTimeline: async () => {
@@ -135,7 +136,7 @@ test("wire mapping: snake_case record and apply run", () => {
   expect(a.planFingerprint).toBeNull();
 });
 
-test("list: detected-at, missing-reason tag, demo tag, failed check wording", async () => {
+test("page: detected-at with the scanner caveat, demo tag, failed check wording", async () => {
   setAdapter(
     stub({
       listRecords: async () => ({
@@ -152,15 +153,16 @@ test("list: detected-at, missing-reason tag, demo tag, failed check wording", as
   );
   render(<App />);
   expect(
-    await screen.findByText(/detected at Nov 8, 03:30 UTC/),
+    await screen.findByText(/Detected Nov 8, 03:30 UTC/),
   ).toBeInTheDocument();
-  expect(screen.getByText("no reason recorded")).toBeInTheDocument();
+  expect(screen.getByText(/when the scanner noticed/)).toBeInTheDocument();
   expect(
     screen.getByText(/DEMO DATA · demo-authored · authored-fixture/),
   ).toBeInTheDocument();
   expect(
     screen.getByText(/not confirmed by the latest check/),
   ).toBeInTheDocument();
+  expect(screen.getAllByText("Needs a reason").length).toBeGreaterThan(0);
 });
 
 test("list: backend failure is an error, not an empty list", async () => {
@@ -193,35 +195,38 @@ test("reason renders as plain text, not HTML", async () => {
   window.location.hash = "#/records/r1";
   setAdapter(
     stub({
-      getRecord: async () =>
-        rec({ reason: "<img src=x onerror=alert(1)>", reporter: "P" }),
+      listRecords: async () => ({
+        records: [
+          rec({
+            reason: "<img src=x onerror=alert(1)>",
+            reporter: "P",
+            reportedAt: "2026-11-08T04:00:00Z",
+          }),
+        ],
+        health,
+      }),
     }),
   );
   const { container } = render(<App />);
-  expect(await screen.findByText(/reported by P/)).toBeInTheDocument();
-  // scoped to <main>: the sidebar wordmark legitimately contains the logo <img>
+  const box = await screen.findByLabelText(/What did you change/);
+  // scoped to <main>: the top bar legitimately contains the logo <img>
   expect(container.querySelector("main img")).toBeNull();
-  expect(container.querySelector("blockquote")).toHaveTextContent(
-    "<img src=x onerror=alert(1)>",
-  );
+  expect(box).toHaveValue("<img src=x onerror=alert(1)>");
+  expect(screen.getByText(/by P\b.*self-reported/)).toBeInTheDocument();
 });
 
-test("detail: missing reason fallback; report saves and shows reported by", async () => {
+test("report saves, says saved, and the record becomes explained", async () => {
   window.location.hash = "#/records/r1";
   setAdapter(stub({}));
   render(<App />);
-  expect(
-    await screen.findByText("Unexplained manual change — no reason recorded."),
-  ).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText(/Your name/), {
-    target: { value: "Paul" },
-  });
-  fireEvent.change(screen.getByLabelText(/What did you change/), {
+  fireEvent.change(await screen.findByLabelText(/What did you change/), {
     target: { value: "webhook blocked" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save report" }));
-  expect(await screen.findByText(/reported by Paul/)).toBeInTheDocument();
-  expect(screen.getByText("Saved by the backend.")).toBeInTheDocument();
+  expect(await screen.findByText("Saved.")).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: /Explained · 1/ }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("report save failure keeps text and says not saved", async () => {
@@ -232,8 +237,7 @@ test("report save failure keeps text and says not saved", async () => {
     }),
   );
   render(<App />);
-  await screen.findByLabelText(/Your name/);
-  fireEvent.change(screen.getByLabelText(/What did you change/), {
+  fireEvent.change(await screen.findByLabelText(/What did you change/), {
     target: { value: "why" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Save report" }));
@@ -243,23 +247,37 @@ test("report save failure keeps text and says not saved", async () => {
   expect(screen.getByLabelText(/What did you change/)).toHaveValue("why");
 });
 
-test("intent does not resolve; keep shows manual suggestion", async () => {
+test("intent does not resolve; keep shows the manual suggestion", async () => {
   window.location.hash = "#/records/r1";
-  setAdapter(stub({}));
-  render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: "Keep" }));
-  expect(await screen.findByText(/Intent recorded/)).toHaveTextContent(
-    "still open",
+  setAdapter(
+    stub({
+      report: async (_i, b) =>
+        rec({ reporter: b.reporter, reason: b.reason, intent: b.intent }),
+    }),
   );
-  expect(screen.getByText(/by hand/)).toBeInTheDocument();
+  render(<App />);
+  fireEvent.change(await screen.findByLabelText(/What did you change/), {
+    target: { value: "kept on purpose" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Keep" }));
+  expect(
+    screen.getByText(/does not resolve the record or change anything/),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save report" }));
+  expect(await screen.findByText(/by hand/)).toBeInTheDocument();
+  expect(screen.queryByText(/This record is resolved/)).toBeNull();
 });
 
 test("resolved record closes the forms", async () => {
   window.location.hash = "#/records/r1";
   setAdapter(
     stub({
-      getRecord: async () =>
-        rec({ resolution: "resolved", resolutionReason: "verified_aligned" }),
+      listRecords: async () => ({
+        records: [
+          rec({ resolution: "resolved", resolutionReason: "verified_aligned" }),
+        ],
+        health,
+      }),
     }),
   );
   render(<App />);
@@ -361,7 +379,7 @@ test("the product is named Argus everywhere a user sees it", async () => {
 test("the Argus logo lockup is the wordmark image and the eye mark is the favicon; the image is decorative because the link is already named", async () => {
   setAdapter(stub({}));
   const { container } = render(<App />);
-  const link = container.querySelector("a.wordmark")!;
+  const link = container.querySelector("a.brand")!;
   expect(link).toHaveAttribute("aria-label", "Argus home");
   const img = link.querySelector("img")!;
   expect(img).toHaveAttribute("src", "/argus-logo.svg");
