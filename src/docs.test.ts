@@ -5,6 +5,7 @@
 import { expect, test } from "vitest";
 import readme from "../README.md?raw";
 import project from "../docs/PROJECT.md?raw";
+import ci from "../.github/workflows/ci.yml?raw";
 
 const both = { README: readme, PROJECT: project };
 
@@ -85,4 +86,19 @@ test("PROJECT.md records the break-glass decisions and the real next gate", () =
 test("PROJECT.md points at the PRD as source of truth", () => {
   expect(project).toMatch(/source of truth/i);
   expect(project).toContain("Break-Glass Handoff — PRD.md");
+});
+
+// ---- CI contract: the backend suite must run in CI, offline and without secrets ----
+
+test("CI runs the backend pytest suite on the supported Python", () => {
+  expect(ci).toMatch(/python-version:\s*["']?3\.12/);
+  expect(ci).toContain('pip install -e ".[dev]"');
+  expect(ci).toMatch(/python -m pytest -q/);
+  expect(ci).toMatch(/working-directory:\s*backend/);
+});
+
+test("CI backend job stays offline and keeps the frontend job", () => {
+  expect(ci).toMatch(/npm test/);
+  expect(ci).not.toMatch(/secrets\./i);
+  expect(ci).not.toMatch(/DIGITALOCEAN|terraform (apply|plan)|BG_ADMIN_TOKEN/i);
 });
