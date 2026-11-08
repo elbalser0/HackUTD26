@@ -21,6 +21,10 @@ test.each([
   "Nothing is publicly deployed",
   "Official challenge pending",
   "challenge notes",
+  "infra/demo",
+  "Not provisioned",
+  "not provisioned",
+  "Real Terraform spike** | n/a | **Pending",
 ])("README/PROJECT no longer contain stale scaffold claim: %s", (stale) => {
   expect(readme).not.toContain(stale);
   expect(project).not.toContain(stale);
@@ -44,9 +48,17 @@ test("README states the UI is read-only and never runs Terraform", () => {
 });
 
 test("README is honest about what is NOT verified", () => {
-  expect(readme).toMatch(/not (yet )?provisioned/i);
   expect(readme).toMatch(/authored fixtures?|hand-written/i);
   expect(readme).toMatch(/real Terraform/i);
+});
+
+test("README and PROJECT point at break-glass-infra and describe the partial spike", () => {
+  for (const t of [readme, project]) {
+    expect(t).toContain("break-glass-infra");
+    expect(t).toMatch(/partial/i);
+  }
+  expect(readme).toMatch(/applied/i);
+  expect(readme).toMatch(/not attached/i);
 });
 
 test("README does not claim the admin dashboard or analytics exist (PRD R9, §7)", () => {
