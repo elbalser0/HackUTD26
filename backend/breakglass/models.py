@@ -186,6 +186,11 @@ class RuleOut(BaseModel):
     source_kubernetes_ids: list[str]
 
 
+class LastActivityOut(BaseModel):
+    at: datetime
+    type: str  # detected | report | decision | review | run_started | run_finished | resolved
+
+
 class RecordOut(BaseModel):
     id: str
     environment: str
@@ -211,6 +216,9 @@ class RecordOut(BaseModel):
     last_check_status: CheckStatus
     last_check_at: datetime | None
     evidence_source: str  # "terraform-refresh-only" | "authored-fixture" | "real-fixture"
+    # Assurance of the latest explanation ("self-reported" | "google-account (verified sign-in)"); null = no reason.
+    reporter_assurance: str | None = None
+    last_activity: LastActivityOut | None = None
 
 
 class RecordList(BaseModel):
@@ -367,4 +375,53 @@ class TimelineOut(BaseModel):
     record_id: str
     events: list[AdminEventOut]
     gaps: list[TimelineGap]
+    limitations: list[str]
+
+
+# --------------------------------------------------------------------------
+# Personas (employee / admin) and the admin overview.
+# --------------------------------------------------------------------------
+
+class MeOut(BaseModel):
+    signed_in: bool
+    email: str | None
+    display_name: str | None
+    role: str | None       # "admin" | "employee" | null (no sign-in configured or not signed in)
+    auth_mode: str         # "firebase" | "shared-token" | "none"
+
+
+class NeedsReasonOut(BaseModel):
+    record_id: str
+    resource_address: str
+    summary: str
+    first_detected_at: datetime
+
+
+class LastScanOut(BaseModel):
+    at: datetime
+    status: str
+
+
+class LastRunOut(BaseModel):
+    run_id: str
+    outcome: RunOutcome
+    at: datetime
+
+
+class ActivityBucketOut(BaseModel):
+    hour: datetime              # UTC start of the hour
+    counts: dict[str, int]      # admin event type -> count; never per person
+
+
+class OverviewOut(BaseModel):
+    window: str
+    generated_at: datetime
+    open_records: int
+    open_without_reason: int
+    needs_reason: list[NeedsReasonOut]
+    last_scan: LastScanOut | None
+    last_run: LastRunOut | None
+    events_by_type: dict[str, int]
+    run_outcomes: dict[str, int]
+    activity: list[ActivityBucketOut]
     limitations: list[str]

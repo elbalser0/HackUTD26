@@ -5,7 +5,8 @@ Agreed design:
 - Firebase configured (project id set):
   * POST report/decision require `Authorization: Bearer <Firebase ID token>` with a
     verified email. The event actor is the account email, assurance
-    "google-account (verified sign-in)". Reads stay open (localhost only).
+    "google-account (verified sign-in)". Reads need a signed-in employee or admin
+    (or the shared token); /api/health stays open. See test_personas.py.
   * /api/admin/* accepts EITHER the shared BG_ADMIN_TOKEN (offline fallback) OR a
     Firebase token whose verified email is in the admin allowlist.
 - Token values are never echoed in responses.
@@ -82,6 +83,7 @@ def test_health_reports_auth_mode_without_secrets(db):
     with make_client(db) as c:
         body = c.get("/api/health").json()
     assert body["auth"] == {"firebase_project_id": PROJECT, "writes_require_sign_in": True,
+                            "reads_require_sign_in": True,
                             "admin_via_firebase": True, "admin_via_shared_token": True}
     assert SHARED not in str(body)
     with make_client(db, firebase=False, admin_token="") as c:
@@ -140,12 +142,12 @@ def test_signed_in_decision_records_verified_account(db):
     assert (e["kind"], e["actor"], e["actor_assurance"]) == ("decision", "dana@example.com", auth.VERIFIED_ASSURANCE)
 
 
-def test_reads_stay_open_with_firebase(db):
+def test_reads_need_sign_in_with_firebase(db):
     rid = rid_of(db)
     with make_client(db) as c:
-        assert c.get("/api/records").status_code == 200
-        assert c.get(f"/api/records/{rid}").status_code == 200
-        assert c.get(f"/api/records/{rid}/events").status_code == 200
+        assert c.get("/api/records").status_code == 401
+        assert c.get(f"/api/records/{rid}", headers=bearer("tok-dana")).status_code == 200
+        assert c.get(f"/api/records/{rid}/events", headers=bearer("tok-dana")).status_code == 200
 
 
 # ---- admin: Firebase admin email OR shared token -------------------------------

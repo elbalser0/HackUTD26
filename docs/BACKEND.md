@@ -162,7 +162,7 @@ Verified OK by the reviewer:
 
 Open (by design or pending the spike):
 - A missing `resource_drift` key is treated as "no drift" (I2). Still unchecked: the real captures always had `resource_drift` present because of the provider noise.
-- The API is unauthenticated, local only.
+- Without Firebase configured the API is unauthenticated, local only. With it, reads and writes need a verified sign-in (or the shared admin token for reads and admin routes); `/api/health` stays open.
 
 ## Runbooks
 
