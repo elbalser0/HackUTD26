@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { useAsync } from "./useAsync";
 import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
 import { AdminShell } from "./components/AdminShell";
+import { AllRecords } from "./components/AllRecords";
 import { Overview } from "./components/Overview";
 import { Loading } from "./components/States";
 import { AdminArea } from "./components/Admin";
@@ -111,7 +112,7 @@ function LegacyLayout({
  * else, or any failure, gets the existing token-gated screen. The server still
  * enforces access on every admin route.
  */
-function AdminHome({ path }: { path: string }) {
+function AdminHome({ path, search }: { path: string; search: string }) {
   const { user } = useAuth();
   const { s } = useAsync(() => api.me(), [user?.email]);
   if (s.state === "loading")
@@ -122,12 +123,23 @@ function AdminHome({ path }: { path: string }) {
         </main>
       </div>
     );
-  if (path === "/admin" && s.state === "ok" && s.data.role === "admin")
-    return (
-      <AdminShell crumb="Overview">
-        <Overview />
-      </AdminShell>
-    );
+  if (s.state === "ok" && s.data.role === "admin") {
+    if (path === "/admin")
+      return (
+        <AdminShell active="overview">
+          <Overview />
+        </AdminShell>
+      );
+    if (path === "/admin/records" || path === "/admin/events")
+      return (
+        <AdminShell active="records">
+          <AllRecords
+            view={path === "/admin/events" ? "events" : "records"}
+            hour={new URLSearchParams(search).get("hour")}
+          />
+        </AdminShell>
+      );
+  }
   return (
     <LegacyLayout crumb="Admin log" admin run={false}>
       <AdminArea path={path} />
@@ -136,10 +148,17 @@ function AdminHome({ path }: { path: string }) {
 }
 
 function App() {
-  const path = useHashPath();
+  const hash = useHashPath();
+  const q = hash.indexOf("?");
+  const path = q === -1 ? hash : hash.slice(0, q);
+  const search = q === -1 ? "" : hash.slice(q + 1);
   const rec = path.match(/^\/records\/([^/]+)$/);
   const run = path.match(/^\/apply\/([^/]+)$/);
-  const admin = path === "/admin" || /^\/admin\/records\/[^/]+$/.test(path);
+  const admin =
+    path === "/admin" ||
+    path === "/admin/records" ||
+    path === "/admin/events" ||
+    /^\/admin\/records\/[^/]+$/.test(path);
   const employee = !admin && !run;
   const crumb = admin
     ? "Admin log"
@@ -148,12 +167,12 @@ function App() {
       : rec
         ? "Record"
         : "Open records";
-  // Same element for #/admin and a record timeline, so the token held in AdminArea survives navigation.
+  // Same element for every admin path, so the token held in AdminArea survives navigation.
   if (admin)
     return (
       <AuthProvider>
         <AuthGate>
-          <AdminHome path={path} />
+          <AdminHome path={path} search={search} />
         </AuthGate>
       </AuthProvider>
     );

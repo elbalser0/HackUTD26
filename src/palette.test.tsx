@@ -38,6 +38,8 @@ const rec = (o: Partial<EmergencyRecord>): EmergencyRecord => ({
   lastCheckStatus: "current",
   lastCheckAt: new Date().toISOString(),
   evidenceSource: "terraform-refresh-only",
+  reporterAssurance: null,
+  lastActivity: null,
   ...o,
 });
 const list = [

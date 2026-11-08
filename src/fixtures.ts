@@ -56,6 +56,8 @@ const records: EmergencyRecord[] = [
     reportedAt: ago(25 * 60),
     intent: "keep",
     lastCheckAt: ago(2),
+    reporterAssurance: "self-reported",
+    lastActivity: { at: ago(25 * 60), type: "report" },
   },
   {
     ...base,
@@ -72,6 +74,8 @@ const records: EmergencyRecord[] = [
     reportedAt: null,
     intent: "unset",
     lastCheckAt: ago(2),
+    reporterAssurance: null,
+    lastActivity: { at: ago(90), type: "detected" },
   },
 ];
 
@@ -87,6 +91,34 @@ const gate = async () => {
 };
 
 export const fixtureAdapter: Adapter = {
+  /** Fake events for ?fixture=admin, built from the fixture records. */
+  async adminEvents(f) {
+    await gate();
+    const mk = (i: number, r: EmergencyRecord): AdminEvent => ({
+      at: r.reportedAt ?? r.firstDetectedAt,
+      type: r.reason ? "explained" : "change_detected",
+      environment: r.environment,
+      recordIds: [r.id],
+      runId: null,
+      resourceAddresses: [r.resourceAddress],
+      actor: r.reporter,
+      actorAssurance: r.reporter ? "self-reported" : "system",
+      outcome: null,
+      planFingerprint: null,
+      detail: r.reason ?? `change detected (fixture event ${i})`,
+    });
+    let events = records.map((r, i) => mk(i, r));
+    if (f.resource) events = events.filter((e) => e.resourceAddresses.includes(f.resource!));
+    if (f.engineer)
+      events = events.filter((e) => e.actor?.toLowerCase() === f.engineer!.toLowerCase());
+    if (f.since) events = events.filter((e) => e.at >= f.since!);
+    if (f.until) events = events.filter((e) => e.at <= f.until!);
+    return {
+      events,
+      totalMatching: events.length,
+      limitations: ["Fixture data: these events are made up."],
+    };
+  },
   /** Fake numbers for ?fixture=admin; derived from the fixture records so the page is coherent. */
   async adminOverview(window) {
     await gate();

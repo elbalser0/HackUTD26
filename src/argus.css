@@ -199,3 +199,8 @@
 .ar .axis.dense span { overflow: visible; white-space: nowrap; text-align: left; }
 .ar .side .brand img { display: block; width: 120px; height: auto; }
 .ar .kpi .note { min-height: 18px; }
+
+/* Chart bars that open an hour in the Events view. */
+.ar .chart a.col { text-decoration: none; cursor: pointer; }
+.ar .chart a.col:hover .seg-bar { filter: brightness(1.25); }
+.ar .chart a.col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }

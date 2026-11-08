@@ -104,6 +104,7 @@ function stub(o: Partial<Adapter>): Adapter {
     adminOverview: async () => {
       throw new Error("unused");
     },
+    adminEvents: async () => ({ events: [], totalMatching: 0, limitations: [] }),
     me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     report: async () => {

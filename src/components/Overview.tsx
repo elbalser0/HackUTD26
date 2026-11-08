@@ -9,6 +9,7 @@ import { age } from "../format";
 import {
   axisLabel,
   barKinds,
+  barLabel,
   chartSummary,
   eventBreakdown,
   humanize,
@@ -187,14 +188,31 @@ function Chart({ o }: { o: OverviewData }) {
         role="img"
         aria-label={chartSummary(o.activity, o.window)}
       >
-        {bars.map((b) => (
-          <div className="col" key={b.hour}>
-            {seg(b.kinds.other, "k-other")}
-            {seg(b.kinds.run, "k-run")}
-            {seg(b.kinds.review, "k-review")}
-            {seg(b.kinds.report, "k-report")}
-          </div>
-        ))}
+        {bars.map((b) => {
+          const inner = (
+            <>
+              {seg(b.kinds.other, "k-other")}
+              {seg(b.kinds.run, "k-run")}
+              {seg(b.kinds.review, "k-review")}
+              {seg(b.kinds.report, "k-report")}
+            </>
+          );
+          // only hours with events are links, so keyboard users are not sent through 168 empty stops
+          return b.total > 0 ? (
+            <a
+              className="col"
+              key={b.hour}
+              href={`#/admin/events?hour=${encodeURIComponent(b.hour)}`}
+              aria-label={barLabel(b, o.window)}
+            >
+              {inner}
+            </a>
+          ) : (
+            <div className="col" key={b.hour}>
+              {inner}
+            </div>
+          );
+        })}
       </div>
       <div className={`axis${o.window === "7d" ? " dense" : ""}`} aria-hidden="true">
         {bars.map((b, i) => (
@@ -220,7 +238,7 @@ function Chart({ o }: { o: OverviewData }) {
             Other
           </span>
         )}
-        <span style={{ marginLeft: "auto" }}>Counts events, not incidents</span>
+        <span style={{ marginLeft: "auto" }}>Select a bar to see that hour&rsquo;s events · counts events, not incidents</span>
       </div>
     </section>
   );

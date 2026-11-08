@@ -142,13 +142,14 @@ test("chartSummary states the total, the window and the busiest hour", () => {
 
 // ---- who sees what ---------------------------------------------------------
 
-test("an admin sees the admin shell: ADMIN sidebar with Overview only, an Admin badge, and no employee records page", async () => {
+test("an admin sees the admin shell: ADMIN sidebar with Overview and All records, an Admin badge, and no employee records page", async () => {
   setAdapter(stub(admin));
   render(<App />);
   await shown();
   const nav = screen.getByRole("navigation", { name: "Main" });
-  expect(within(nav).getAllByRole("link")).toHaveLength(1);
+  expect(within(nav).getAllByRole("link")).toHaveLength(2);
   expect(within(nav).getByRole("link", { name: /Overview/ })).toHaveAttribute("aria-current", "page");
+  expect(within(nav).getByRole("link", { name: /All records/ })).toHaveAttribute("href", "#/admin/records");
   expect(screen.getByText("ADMIN")).toBeInTheDocument();
   expect(screen.getByText("Admin", { selector: ".role" })).toBeInTheDocument();
   expect(screen.queryByRole("heading", { name: "Manual changes" })).toBeNull();
@@ -375,4 +376,21 @@ test("the admin view is read-only: no report form or Save button", async () => {
   await shown();
   expect(screen.queryByRole("button", { name: "Save report" })).toBeNull();
   expect(screen.queryByRole("textbox")).toBeNull();
+});
+
+// ---- chart bars open that hour in the Events view --------------------------
+
+test("bars with events are links to that hour in the Events view; empty hours are not links", async () => {
+  setAdapter(stub(admin));
+  const { container } = render(<App />);
+  await shown();
+  const links = container.querySelectorAll<HTMLAnchorElement>(".chart a.col");
+  expect(links).toHaveLength(2); // the two hours with events in the default overview
+  const href = links[0].getAttribute("href")!;
+  expect(href).toMatch(/^#\/admin\/events\?hour=/);
+  const hour = decodeURIComponent(href.split("hour=")[1]);
+  expect(new Date(hour).toISOString().slice(14)).toBe("00:00.000Z");
+  expect(links[0]).toHaveAttribute("aria-label", expect.stringMatching(/5 events at \d\d:00 UTC/));
+  expect(links[1]).toHaveAttribute("aria-label", expect.stringMatching(/2 events/));
+  expect(container.querySelectorAll(".chart div.col")).toHaveLength(22);
 });

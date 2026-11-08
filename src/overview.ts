@@ -79,3 +79,10 @@ export function axisLabel(hour: string, index: number, window: "24h" | "7d"): st
   if (window === "24h") return index % 3 === 0 ? hh(hour) : "";
   return hh(hour) === "00" ? day(hour) : "";
 }
+
+/** "5 events at 02:00 UTC" (with the date in the 7 d view) */
+export function barLabel(b: Activity[number], window: "24h" | "7d"): string {
+  const n = totalOf(b.counts);
+  const when = window === "7d" ? `${day(b.hour)}, ${hh(b.hour)}:00 UTC` : `${hh(b.hour)}:00 UTC`;
+  return `${plural(n, "event")} at ${when}`;
+}
