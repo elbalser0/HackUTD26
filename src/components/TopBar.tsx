@@ -23,7 +23,7 @@ export function TopBar() {
   return (
     <header className="top">
       <a className="brand" href="#/" aria-label="Argus home">
-        <img src="/argus-logo.svg" alt="" />
+        <img src="/argus-logo-horizontal.png" alt="" />
       </a>
       <div className="top-right">
         {usingFixtures && (

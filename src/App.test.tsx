@@ -393,7 +393,7 @@ test("the Argus logo lockup is the wordmark image and the eye mark is the favico
   const link = container.querySelector("a.brand")!;
   expect(link).toHaveAttribute("aria-label", "Argus home");
   const img = link.querySelector("img")!;
-  expect(img).toHaveAttribute("src", "/argus-logo.svg");
+  expect(img).toHaveAttribute("src", "/argus-logo-horizontal.png");
   expect(img).toHaveAttribute("alt", "");
   expect(link.textContent).toBe(""); // the lockup is an image; the accessible name comes from aria-label
   const html = (await import("../index.html?raw")).default;
