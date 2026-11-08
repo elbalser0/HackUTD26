@@ -199,7 +199,8 @@ test("reason renders as plain text, not HTML", async () => {
   );
   const { container } = render(<App />);
   expect(await screen.findByText(/reported by P/)).toBeInTheDocument();
-  expect(container.querySelector("img")).toBeNull();
+  // scoped to <main>: the sidebar wordmark legitimately contains the logo <img>
+  expect(container.querySelector("main img")).toBeNull();
   expect(container.querySelector("blockquote")).toHaveTextContent(
     "<img src=x onerror=alert(1)>",
   );
@@ -340,7 +341,39 @@ test("header keeps the current page name apart from the product-name prefix so p
   const { container } = render(<App />);
   const header = container.querySelector("header")!;
   const root = header.querySelector(".crumb-root");
-  expect(root).toHaveTextContent("Break-Glass Handoff");
+  expect(root).toHaveTextContent("Argus");
   expect(root).not.toHaveTextContent("Apply warning");
   expect(header.querySelector(".crumb-current")).toHaveTextContent("Apply warning");
+});
+
+test("the product is named Argus everywhere a user sees it", async () => {
+  setAdapter(stub({}));
+  const { container } = render(<App />);
+  const text = container.textContent ?? "";
+  const labels = [...container.querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label")).join(" ");
+  expect(text + labels).toMatch(/Argus/i);
+  expect(text + labels).not.toMatch(/break-?glass/i);
+  const html = (await import("../index.html?raw")).default;
+  expect(html).toMatch(/<title>Argus/);
+  expect(html).not.toMatch(/break-?glass/i);
+});
+
+test("the Argus logo lockup is the wordmark image and the eye mark is the favicon; the image is decorative because the link is already named", async () => {
+  setAdapter(stub({}));
+  const { container } = render(<App />);
+  const link = container.querySelector("a.wordmark")!;
+  expect(link).toHaveAttribute("aria-label", "Argus home");
+  const img = link.querySelector("img")!;
+  expect(img).toHaveAttribute("src", "/argus-logo.svg");
+  expect(img).toHaveAttribute("alt", "");
+  expect(link.textContent).toBe(""); // the lockup is an image; the accessible name comes from aria-label
+  const html = (await import("../index.html?raw")).default;
+  expect(html).toMatch(/<link[^>]+rel="icon"[^>]+type="image\/svg\+xml"[^>]+href="\/argus-mark\.svg"/);
+  const files = import.meta.glob("../public/*.svg", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+  for (const f of ["../public/argus-logo.svg", "../public/argus-mark.svg"]) {
+    expect(files[f], f).toMatch(/^<svg /);
+    expect(files[f], f).not.toMatch(/<script|<foreignObject|href=|onload|<style/i); // static artwork only
+  }
+  expect(files["../public/argus-logo.svg"]).toContain("ARGUS");
+  expect(files["../public/argus-mark.svg"]).not.toContain("ARGUS");
 });

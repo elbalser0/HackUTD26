@@ -19,8 +19,10 @@
   letter-spacing: -5px;
   line-height: 1;
 }
-.wordmark > span {
-  color: var(--accent);
+.wordmark img {
+  display: block;
+  width: 150px;
+  height: auto;
 }
 .wordmark small {
   display: block;
@@ -413,6 +415,10 @@ footer {
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+  .wordmark img {
+    width: 96px;
+    height: auto;
   }
   .wordmark small {
     margin: 0 0 0 9px;

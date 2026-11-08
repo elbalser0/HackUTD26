@@ -4,7 +4,7 @@ Written 2026-11-07 after PR #11; updated after PR #16 (admin dashboard UI, keep/
 
 ## What this is
 
-**Break-Glass Handoff** (HackUTD26, NMC² challenge). When an engineer changes infrastructure by hand during an incident, a later `terraform apply` can silently undo it. The backend detects the manual change from a Terraform refresh-only plan, stores the explanation, and the guarded `breakglass apply` wrapper pauses an apply that would reverse it, requiring an explicit decision. History is append-only. The web UI is read-only and never runs Terraform. Demo target: one DigitalOcean firewall (`digitalocean_firewall.demo`, "break-glass-demo") in `break-glass-infra/`.
+**Argus** (HackUTD26, NMC² challenge). When an engineer changes infrastructure by hand during an incident, a later `terraform apply` can silently undo it. The backend detects the manual change from a Terraform refresh-only plan, stores the explanation, and the guarded `breakglass apply` wrapper pauses an apply that would reverse it, requiring an explicit decision. History is append-only. The web UI is read-only and never runs Terraform. Demo target: one DigitalOcean firewall (`digitalocean_firewall.demo`, "break-glass-demo") in `break-glass-infra/`.
 
 Team: Daniel (product, frontend; the only machine that holds the Terraform state), Samuel (backend), Andrew (infrastructure). Either Daniel or Samuel may be the user you are working with; check the git user. Real Terraform steps run only on Daniel's machine.
 
@@ -94,6 +94,8 @@ The user's token lives in `.env` and you must not touch it. Pattern that worked:
 Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraform/`) is gitignored. Don't print it.
 
 ## Gotchas
+
+- **Naming:** the product is **Argus**. Only user-facing text and the docs were renamed. Deliberately unchanged: the Python package and CLI (`breakglass`), `BG_*` env vars, the `break-glass-infra/` directory, the real cloud firewall name `break-glass-demo` (renaming it would change a cloud resource), and the PRD filename (links and tests point at it). Don't rename those without the user asking.
 
 - One machine owns the Terraform state (the user's). Starting `breakglass apply` marks any other unfinished run in the same environment `unknown`, so run it from one terminal.
 - The firewall is not attached to the droplet (`attach_firewall = false`), so console edits to it affect no live traffic. The user's DigitalOcean console edits are theirs to make; don't do them through the browser unless told.

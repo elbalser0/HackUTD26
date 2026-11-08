@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 10 340 220" width="1360" height="880">
+<path d="M36,134 C100,40 250,12 364,106 L330,108 C240,54 130,60 78,124 Z" fill="#FFFFFF"/>
+<path d="M364,106 C300,200 150,228 36,134 L70,132 C160,186 270,180 322,116 Z" fill="#FFFFFF"/>
+<circle cx="200" cy="120" r="36" fill="none" stroke="#4A8BD6" stroke-width="12" stroke-dasharray="62 13.4" transform="rotate(-62 200 120)"/>
+<polygon points="199,95 217,95 205,145 187,145" fill="#FFFFFF"/>
+</svg>

@@ -1,4 +1,4 @@
-# Backend: Break-Glass Handoff
+# Backend: Argus
 
 Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.md](API.md). Demo infrastructure: [`break-glass-infra/main.tf`](../break-glass-infra/main.tf) (Daniel's).
 

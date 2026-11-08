@@ -1,3 +1,3 @@
-"""Break-Glass Handoff backend."""
+"""Argus backend."""
 
 __version__ = "0.1.0"

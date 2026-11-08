@@ -255,7 +255,7 @@ def cmd_demo_reset(args, db: Database, settings) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="breakglass", description="Break-Glass Handoff: emergency-change context for Terraform applies.")
+    p = argparse.ArgumentParser(prog="breakglass", description="Argus: emergency-change context for Terraform applies.")
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("scan", help="detect manual changes with a Terraform refresh-only plan (never applied)")

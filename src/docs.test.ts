@@ -11,8 +11,23 @@ import handoff from "../docs/HANDOFF.md?raw";
 const both = { README: readme, PROJECT: project };
 
 test.each(Object.entries(both))("%s names the actual product", (_n, text) => {
-  expect(text).toContain("Break-Glass Handoff");
+  expect(text).toContain("Argus");
 });
+
+// The product is named Argus. Only the PRD *filename* and the infra/CLI identifiers keep the old name.
+test.each(["README.md", "docs/API.md", "docs/BACKEND.md", "docs/FRONTEND.md", "docs/HANDOFF.md", "docs/PROJECT.md"])(
+  "%s does not call the product Break-Glass",
+  (f) => {
+    const raw = import.meta.glob("../{README,docs/*}.md", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    const text = raw[`../${f}`];
+    expect(text, f).toBeTruthy();
+    const prose = text
+      .replace(/Break-Glass(%20| )Handoff(%20| )(—|%E2%80%94)(%20| )PRD\.md/g, "")
+      .replace(/break-glass-(infra|demo)/g, "")
+      .replace(/feat\/break-glass-backend/g, "");
+    expect(prose).not.toMatch(/Break-Glass( Handoff)?(?![-\w])/);
+  },
+);
 
 test.each([
   "makes no API calls",

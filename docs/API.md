@@ -1,4 +1,4 @@
-# Break-Glass Handoff API — v0.1 contract
+# Argus API — v0.1 contract
 
 Owner: Samuel (backend). Consumer: Daniel (frontend). Source of truth for types: `backend/breakglass/models.py`.
 

@@ -1,6 +1,6 @@
-# Break-Glass Handoff
+# Argus
 
-HackUTD 2026 project for the NMC² challenge. During an incident an engineer may change infrastructure by hand without updating Terraform, and a later `terraform apply` can silently undo that fix. Break-Glass Handoff records the emergency change and its explanation, then pauses a later apply that would reverse it. The engineer must acknowledge or cancel with the context in front of them.
+HackUTD 2026 project for the NMC² challenge. During an incident an engineer may change infrastructure by hand without updating Terraform, and a later `terraform apply` can silently undo that fix. Argus records the emergency change and its explanation, then pauses a later apply that would reverse it. The engineer must acknowledge or cancel with the context in front of them.
 
 The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scope and acceptance. It records requirements, **not** implemented or verified results. This is an independent hackathon project, not affiliated with or endorsed by NMC².
 
