@@ -37,9 +37,8 @@ function App() {
         Skip to content
       </a>
       <aside className="sidebar">
-        <a className="wordmark" href="#/" aria-label="Break-Glass Handoff home">
-          B<span>²</span>
-          <small>BREAK-GLASS</small>
+        <a className="wordmark" href="#/" aria-label="Argus home">
+          <img src="/argus-logo.svg" alt="" />
         </a>
         <div className="workspace-label">
           INCIDENT CONTEXT <span>01</span>
@@ -74,7 +73,7 @@ function App() {
         <header>
           <span>
             <span className="crumb-root">
-              Break-Glass Handoff <span className="slash">/</span>{" "}
+              Argus <span className="slash">/</span>{" "}
             </span>
             <span className="crumb-current">{crumb}</span>
           </span>

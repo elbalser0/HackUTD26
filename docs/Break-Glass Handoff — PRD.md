@@ -5,7 +5,7 @@ source_type: conversation-and-attached-prd
 source_file: PRD-break-glass-handoff-6.md
 ---
 
-# Product Requirements Document: Break-Glass Handoff (working title)
+# Product Requirements Document: Argus (formerly "Break-Glass Handoff")
 
 **Author:** Daniel  
 **Date:** 2026-11-07 (source PRD date)  
@@ -17,7 +17,7 @@ source_file: PRD-break-glass-handoff-6.md
 
 During an incident, an engineer may manually change infrastructure without immediately updating Terraform. A later apply can undo that fix. The incoming engineer can see the planned difference but may not know why the emergency change exists or whether it is safe to overwrite.
 
-Break-Glass Handoff connects three moments: **capture the emergency context, require review before a conflicting apply, and preserve the decision for later investigation.** Engineers must use the wrapper as the team's approved deployment path. When a plan would undo a recorded emergency change, the wrapper pauses, displays the change and its recorded explanation, and requires an explicit decision and acknowledgement before proceeding. It does not prove safety or make the decision for the engineer.
+Argus connects three moments: **capture the emergency context, require review before a conflicting apply, and preserve the decision for later investigation.** Engineers must use the wrapper as the team's approved deployment path. When a plan would undo a recorded emergency change, the wrapper pauses, displays the change and its recorded explanation, and requires an explicit decision and acknowledgement before proceeding. It does not prove safety or make the decision for the engineer.
 
 A persistent shared log records observed changes, reported explanations, review decisions, and wrapper execution outcomes. An authorized admin dashboard lets team leads inspect the history across engineers and trace the sequence preceding a failure. A classifying agent can organize this evidence and highlight recurring patterns. Identifying actions associated with the most downtime additionally requires linked incident durations or health evidence; decision logs alone cannot establish causation.
 

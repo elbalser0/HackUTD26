@@ -88,7 +88,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
               if e and e.strip()}
     # Firebase is on only when a project id is configured (an injected verifier alone does not enable it).
     verify = (verifier or auth.firebase_verifier(project)) if project else None
-    app = FastAPI(title="Break-Glass Handoff API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
+    app = FastAPI(title="Argus API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
     # Host allowlist blocks DNS-rebinding pages from reaching this unauthenticated local API.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or list(settings.allowed_hosts))
     app.add_middleware(

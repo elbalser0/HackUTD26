@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build **Break-Glass Handoff** for the NMC² challenge at HackUTD 2026: capture an emergency manual infrastructure change with its explanation, pause a later Terraform apply that would undo it, and keep a shared decision history.
+Build **Argus** for the NMC² challenge at HackUTD 2026: capture an emergency manual infrastructure change with its explanation, pause a later Terraform apply that would undo it, and keep a shared decision history.
 
 **Source of truth: `docs/Break-Glass Handoff — PRD.md`.** This file tracks decisions and status against it. If they conflict, the PRD wins. Daniel also wants to explore product work and employment at NMC².
 

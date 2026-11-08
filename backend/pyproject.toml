@@ -1,7 +1,7 @@
 [project]
 name = "breakglass"
 version = "0.1.0"
-description = "Break-Glass Handoff backend: detect manual infra changes, record context, warn before Terraform reverses them."
+description = "Argus backend: detect manual infra changes, record context, warn before Terraform reverses them."
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",

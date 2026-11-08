@@ -98,7 +98,7 @@ function SignInPage({ onOffline }: { onOffline: () => void }) {
         <div className="signin-mark" aria-hidden="true">
           B<span>²</span>
         </div>
-        <div className="eyebrow">BREAK-GLASS HANDOFF</div>
+        <div className="eyebrow">ARGUS</div>
         <h1 id="signin-title">
           Manual changes,
           <br />
