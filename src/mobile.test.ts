@@ -41,6 +41,8 @@ const px = (v: string | undefined) => (v?.endsWith("px") ? parseFloat(v) : NaN);
 test.each([
   "nav button",
   "nav a",
+  ".account-trigger",
+  ".account-menu .btn",
   ".btn",
   ".wordmark",
   ".detail > a:first-child",
@@ -77,4 +79,11 @@ test("header badge never shrinks its text into a cramped box", () => {
 
 test("phones hide the product-name breadcrumb prefix (the sidebar wordmark already names it) so the current page stays visible", () => {
   expect(mobileDecls(".crumb-root")["display"]).toBe("none");
+});
+
+test("account menu is wide enough that 'Sign out' never wraps (the phone trigger is avatar-only)", () => {
+  const rule = css.match(/\.account-menu\s*\{([^}]*)\}/)?.[1] ?? "";
+  expect(px(/min-width:\s*([\d.]+px)/.exec(rule)?.[1])).toBeGreaterThanOrEqual(120);
+  const btn = css.match(/\.account-menu \.btn\s*\{([^}]*)\}/)?.[1] ?? "";
+  expect(btn).toMatch(/white-space:\s*nowrap/);
 });

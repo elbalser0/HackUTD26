@@ -75,4 +75,4 @@ GitHub Actions runs the frontend checks on pushes and pull requests.
 - No cloud operation runs without explicit team approval.
 - Reasons and reporters are self-reported, not verified authorship. A Google sign-in verifies who submitted a web report or decision, not who made the console change. Detected-at is not changed-at.
 - Running `terraform apply` directly bypasses the wrapper. Enforcement through CI is a stretch goal, not built.
-- Visual reference: https://nmc2.com/ (black and white, blue `#2b9cfc`). The geometric artwork and B² mark are original CSS.
+- Visual reference: https://nmc2.com/ (black and white, blue `#2b9cfc`). The geometric artwork is original CSS. The Argus logo files in `public/` were supplied by the team.

@@ -786,15 +786,12 @@ select:focus-visible {
   background: rgba(16, 18, 22, 0.92);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 }
-.signin-mark {
-  font-size: 44px;
-  font-weight: 700;
-  letter-spacing: -4px;
-  line-height: 1;
+.signin-logo {
+  display: block;
+  width: 200px;
+  max-width: 70%;
+  height: auto;
   margin-bottom: 26px;
-}
-.signin-mark span {
-  color: var(--accent);
 }
 .signin-card h1 {
   font-size: clamp(32px, 5vw, 46px);
@@ -862,11 +859,54 @@ select:focus-visible {
   min-width: 0;
 }
 .account {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
   padding-left: 16px;
   border-left: 1px solid var(--border);
+}
+.account-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  color: inherit;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  border-color: var(--border);
+  background: #101216;
+}
+.account-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.account-caret {
+  color: var(--muted);
+  font-size: 11px;
+}
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 140px;
+  z-index: 30;
+  background: #101216;
+  border: 1px solid #34404f;
+  border-radius: 4px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.account-menu .btn {
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
 }
 .avatar {
   width: 34px;
@@ -896,20 +936,6 @@ select:focus-visible {
   color: var(--muted);
   font-size: 11px;
 }
-.verified {
-  font-size: 9px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: #8fe3b0;
-  border: 1px solid #23573a;
-  background: #0d2016;
-  padding: 6px 8px;
-  border-radius: 3px;
-  white-space: nowrap;
-}
-.account-out-btn {
-  padding: 8px 14px;
-}
 .account .gbtn {
   min-height: 36px;
   font-size: 13px;
@@ -921,7 +947,7 @@ select:focus-visible {
     padding: 32px 22px 26px;
   }
   .account-who,
-  .verified,
+  .account-caret,
   .account-state {
     display: none;
   }
@@ -929,7 +955,8 @@ select:focus-visible {
     padding-left: 10px;
     gap: 8px;
   }
-  .account-out-btn,
+  .account-trigger,
+  .account-menu .btn,
   .account .gbtn {
     min-height: 44px;
   }

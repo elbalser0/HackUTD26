@@ -5,7 +5,7 @@
  * (<AuthGate>). The only way past it without Google is the shared-token admin
  * fallback, kept for when Google sign-in is unreachable (e.g. venue Wi-Fi).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { setTokenProvider } from "../api";
 import { AuthContext, currentClient, none, useAuth } from "../auth";
@@ -95,10 +95,7 @@ function SignInPage({ onOffline }: { onOffline: () => void }) {
   return (
     <div className="signin-page">
       <section className="signin-card" aria-labelledby="signin-title">
-        <div className="signin-mark" aria-hidden="true">
-          B<span>²</span>
-        </div>
-        <div className="eyebrow">ARGUS</div>
+        <img className="signin-logo" src="/argus-logo.svg" alt="Argus" />
         <h1 id="signin-title">
           Manual changes,
           <br />
@@ -151,9 +148,34 @@ function initials(u: AuthUser): string {
   return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
 }
 
-/** Header account area: who is signed in, that it's verified, and sign out. */
+/**
+ * Header account area. One button (photo, name, email) opens a small menu with
+ * Sign out. The menu closes on a second click, Escape, or a click outside it.
+ */
 export function AccountBar() {
   const { configured, user, signOut } = useAuth();
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const firstItem = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    firstItem.current?.focus();
+    const onDown = (e: MouseEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      trigger.current?.focus();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   if (!configured) return null;
   if (!user)
     return (
@@ -163,24 +185,45 @@ export function AccountBar() {
       </div>
     );
   return (
-    <div className="account">
-      {user.photoUrl ? (
-        <img className="avatar" src={user.photoUrl} alt="" referrerPolicy="no-referrer" />
-      ) : (
-        <span className="avatar" aria-hidden="true">
-          {initials(user)}
+    <div className="account" ref={root}>
+      <button
+        ref={trigger}
+        className="account-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Account menu for ${user.email}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {user.photoUrl ? (
+          <img className="avatar" src={user.photoUrl} alt="" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="avatar" aria-hidden="true">
+            {initials(user)}
+          </span>
+        )}
+        <span className="account-who">
+          <strong>{user.name || user.email}</strong>
+          <small>{user.email}</small>
         </span>
-      )}
-      <span className="account-who">
-        <strong>{user.name || user.email}</strong>
-        <small>{user.email}</small>
-      </span>
-      <span className="verified" title="Signed in with Google. Shows who submits explanations, not who made a change.">
-        ✓ Verified Google account
-      </span>
-      <button className="btn account-out-btn" onClick={() => void signOut()}>
-        Sign out
+        <span className="account-caret" aria-hidden="true">
+          ▾
+        </span>
       </button>
+      {open && (
+        <div className="account-menu" role="menu">
+          <button
+            ref={firstItem}
+            role="menuitem"
+            className="btn"
+            onClick={() => {
+              setOpen(false);
+              void signOut();
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }

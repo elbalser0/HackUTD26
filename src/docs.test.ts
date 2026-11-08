@@ -239,3 +239,19 @@ test("API.md limitations match what the admin endpoints actually return", () => 
   expect(section).not.toMatch(/no per-admin identity/i); // sign-in gives per-admin identity
   expect(section).not.toMatch(/A reporter is self-reported;/); // signed-in web actions are verified
 });
+
+// ---- the old B² mark must not survive anywhere ----
+const appSources = import.meta.glob(["./**/*.{ts,tsx,css}", "!./**/*.test.*"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+test("no source file still draws the old B² mark", () => {
+  expect(Object.keys(appSources).length).toBeGreaterThan(5); // the scan itself works
+  const offenders = Object.entries(appSources).filter(([, src]) => /B²|B<span>/.test(src)).map(([f]) => f);
+  expect(offenders).toEqual([]);
+});
+
+test("the old logo asset is gone and the docs do not describe a B² mark", () => {
+  const assets = Object.keys(import.meta.glob("../public/*"));
+  expect(assets).not.toContain("../public/hackutd.svg");
+  expect(assets).toEqual(expect.arrayContaining(["../public/argus-logo.svg", "../public/argus-mark.svg"]));
+  expect(readme).not.toMatch(/B²/);
+});
