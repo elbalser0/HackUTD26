@@ -182,3 +182,12 @@
 .ar .tl { padding-top: 12px; }
 .ar .rrow { text-decoration: none; }
 .ar .stack-sm > .tag { align-self: flex-start; }
+
+/* Command palette overlay. */
+.pal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; align-items: flex-start; padding: 72px 16px 16px; background: rgba(5, 6, 8, 0.72); }
+.pal-backdrop .pal { display: flex; flex-direction: column; max-height: calc(100vh - 100px); }
+.pal-list { overflow-y: auto; min-height: 0; padding-bottom: 8px; }
+.pal-empty, .pal-more { padding: 14px 20px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.pal-more { padding: 6px 12px 0; }
+.search-btn { min-height: 44px; cursor: pointer; }
+@media (max-width: 720px) { .pal-backdrop { padding-top: 16px; } }

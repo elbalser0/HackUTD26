@@ -82,6 +82,7 @@ function stub(o: Partial<Adapter> = {}, list = four()): Adapter {
       return r;
     },
     decide: async (id, intent) => ({ ...store.get(id)!, intent }),
+    me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     getApplyRun: async () => {
       throw new Error("unused");

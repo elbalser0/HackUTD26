@@ -101,6 +101,7 @@ function stub(o: Partial<Adapter>): Adapter {
     getRecord: async () => {
       throw new Error("unused");
     },
+    me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     report: async () => {
       throw new Error("unused");

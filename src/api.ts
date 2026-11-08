@@ -167,7 +167,21 @@ export interface RecordEvent {
   data: Record<string, unknown>;
 }
 
+export type Role = "admin" | "employee";
+export type AuthMode = "firebase" | "shared-token" | "none";
+
+/** GET /api/me. Display only: the server still enforces access on every route. */
+export interface Me {
+  signedIn: boolean;
+  email: string | null;
+  displayName: string | null;
+  role: Role | null;
+  authMode: AuthMode;
+}
+
 export interface Adapter {
+  /** Which persona to show. Never a substitute for server-side checks. */
+  me(): Promise<Me>;
   /** Every record, open and resolved; the UI buckets them. */
   listRecords(): Promise<RecordList>;
   recordEvents(id: string): Promise<RecordEvent[]>;
@@ -259,6 +273,17 @@ export function fromWireApplyRun(w: Wire): ApplyRun {
     ackOutcome: w.ack_outcome,
     ackNote: w.ack_note ?? null,
     completedAt: w.completed_at ?? null,
+  };
+}
+
+export function fromWireMe(w: Wire): Me {
+  return {
+    signedIn: w.signed_in === true,
+    email: w.email ?? null,
+    displayName: w.display_name ?? null,
+    // Only the two known values count; anything else is "no role", never admin.
+    role: w.role === "admin" || w.role === "employee" ? w.role : null,
+    authMode: w.auth_mode,
   };
 }
 
@@ -380,6 +405,9 @@ async function getHealth(): Promise<Health | null> {
 }
 
 const realAdapter: Adapter = {
+  async me() {
+    return fromWireMe(await http("/me", { headers: await signedInHeaders() }));
+  },
   async listRecords() {
     const [w, health] = await Promise.all([
       http<Wire>("/records", { headers: await signedInHeaders() }),

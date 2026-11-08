@@ -22,6 +22,8 @@ import type { Bucket } from "../records";
 import { useAsync } from "../useAsync";
 import { ErrorState, Loading, Notice } from "./States";
 import { Freshness } from "./RecordList";
+import { Palette } from "./Palette";
+import { usePalette } from "../paletteContext";
 
 export function RecordsPage({ routeId }: { routeId: string | null }) {
   const { s, reload } = useAsync(() => api.listRecords(), []);
@@ -62,6 +64,7 @@ function Workspace({
   routeId: string | null;
 }) {
   const { user } = useAuth();
+  const palette = usePalette();
   const [records, setRecords] = useState(initial);
   const [sel, setSel] = useState<string | null>(routeId);
   const [tab, setTab] = useState<Bucket>(() => {
@@ -96,6 +99,17 @@ function Workspace({
 
   return (
     <>
+      {palette.open && (
+        <Palette
+          records={records}
+          onRecord={(r) => {
+            setTab(bucketOf(r));
+            open(r.id);
+          }}
+          onFilter={setTab}
+          onClose={() => palette.setOpen(false)}
+        />
+      )}
       <Freshness health={health} records={records} />
       {health?.auth?.writesRequireSignIn && !user && (
         <Notice tone="info">

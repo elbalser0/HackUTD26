@@ -3,6 +3,8 @@ import { usingFixtures } from "./api";
 import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
 import { AdminArea } from "./components/Admin";
 import { ApplyRunView } from "./components/ApplyRunView";
+import { PaletteProvider } from "./components/PaletteContext";
+import { TopBar } from "./components/TopBar";
 import { RecordsPage } from "./components/Records";
 import "./App.css";
 import "./argus.css";
@@ -34,25 +36,17 @@ function App() {
     return (
       <AuthProvider>
         <AuthGate>
+          <PaletteProvider>
           <div className="ar">
             <a className="skip" href="#main">
               Skip to content
             </a>
-            <header className="top">
-              <a className="brand" href="#/" aria-label="Argus home">
-                <img src="/argus-logo.svg" alt="" />
-              </a>
-              <div className="top-right">
-                {usingFixtures && (
-                  <span className="chip">DEV FIXTURE DATA, NOT A BACKEND</span>
-                )}
-                <AccountBar />
-              </div>
-            </header>
+            <TopBar />
             <main id="main" className="content" style={{ maxWidth: "none" }}>
               <RecordsPage routeId={rec ? decodeURIComponent(rec[1]) : null} />
             </main>
           </div>
+          </PaletteProvider>
         </AuthGate>
       </AuthProvider>
     );

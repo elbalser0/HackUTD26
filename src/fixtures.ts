@@ -87,6 +87,16 @@ const gate = async () => {
 };
 
 export const fixtureAdapter: Adapter = {
+  /** ?fixture=admin shows the admin persona; any other fixture is an employee. */
+  async me() {
+    return {
+      signedIn: true,
+      email: "demo@example.com",
+      displayName: "Demo",
+      role: scenario() === "admin" ? "admin" : "employee",
+      authMode: "none",
+    };
+  },
   async listRecords(): Promise<RecordList> {
     await gate();
     const s = scenario();

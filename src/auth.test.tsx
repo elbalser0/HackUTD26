@@ -96,6 +96,7 @@ function stub(o: Partial<Adapter> = {}): Adapter {
     getRecord: async () => rec(),
     report: async (_i, b) => rec({ reporter: b.reporter, reason: b.reason }),
     decide: async (_i, intent) => rec({ intent }),
+    me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     getApplyRun: async () => {
       throw new Error("unused");
