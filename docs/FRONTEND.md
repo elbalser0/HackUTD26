@@ -43,7 +43,7 @@ Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE D
 
 ## Verification evidence (2026-11-07)
 
-- `npm test`: 110 passed on 2026-11-07 (stub adapters and wire mapping, docs and CSS contracts; not backend integration)
+- `npm test`: all passing on 2026-11-07, run it for the current count (stub adapters and wire mapping, docs and CSS contracts; not backend integration)
 - `npm run lint`: clean; `npm run build`: ok
 - REAL backend (branch `feat/break-glass-backend` @41280dd, seeded demo record) in Chrome via the Vite proxy:
   - list/detail render live data with "LIVE API" badge and demo-data tag (`demo-authored · authored-fixture`)

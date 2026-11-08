@@ -1,6 +1,6 @@
 # Handoff for the next agent
 
-Written 2026-11-07 after PR #11; updated after PR #18 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in, rename to Argus and logo). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
+Written 2026-11-07 after PR #11; updated after PR #19 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in, rename to Argus and logo). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
 
 ## What this is
 
@@ -19,7 +19,7 @@ These came from corrections and approvals in earlier sessions. Follow them.
 - **Be honest about verification.** Say what ran on real Terraform, what ran only against authored fixtures or a mocked runner, and what has not run. Don't report acceptance criteria as done unless they were verified.
 - Keep answers short. Recommend, don't survey. Refer to people with they/them unless told otherwise.
 
-## State of the code (main, after PR #16)
+## State of the code (main, after PR #19)
 
 | Piece | Where | Notes |
 |---|---|---|

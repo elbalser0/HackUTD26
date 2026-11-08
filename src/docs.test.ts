@@ -6,6 +6,10 @@ import { expect, test } from "vitest";
 import readme from "../README.md?raw";
 import project from "../docs/PROJECT.md?raw";
 import frontend from "../docs/FRONTEND.md?raw";
+import apiDoc from "../docs/API.md?raw";
+import backendDoc from "../docs/BACKEND.md?raw";
+import adminPy from "../backend/breakglass/admin.py?raw";
+import apiPy from "../backend/breakglass/api.py?raw";
 import ci from "../.github/workflows/ci.yml?raw";
 import handoff from "../docs/HANDOFF.md?raw";
 
@@ -198,4 +202,40 @@ test("handoff carries the practical gotchas that cost time this session", () => 
 test("handoff does not contain secrets or real account values", () => {
   expect(handoff).not.toMatch(/dop_v1_|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b(?<!0\.0\.0\.0)(?<!127\.0\.0\.1)(?<!203\.0\.113\.10)/);
   expect(handoff).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?<!00000000-0000-4000-8000-000000000001)/);
+});
+
+// ---- docs vs code: guards that read the backend source so the reference docs cannot silently lag ----
+const backendSources = import.meta.glob("../backend/breakglass/*.py", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+
+test("BACKEND.md documents every BG_* environment variable the backend reads", () => {
+  const used = new Set<string>();
+  for (const src of Object.values(backendSources))
+    for (const m of src.matchAll(/\bBG_[A-Z][A-Z_]*[A-Z]\b/g)) used.add(m[0]);
+  expect(used.size).toBeGreaterThan(8); // the scan itself works
+  const missing = [...used].filter((v) => !backendDoc.includes(v));
+  expect(missing).toEqual([]);
+});
+
+test("API.md has a section heading for every HTTP route in api.py", () => {
+  const routes = [...apiPy.matchAll(/@app\.(get|post|put|delete|patch)\("([^"]+)"/g)].map((m) => [m[1].toUpperCase(), m[2]]);
+  expect(routes.length).toBeGreaterThanOrEqual(11);
+  const norm = (p: string) => p.replace(/\{[a-z_]+\}/g, "{id}");
+  const missing = routes.filter(([method, path]) => !apiDoc.includes(`### \`${method} ${norm(path)}`)).map((r) => r.join(" "));
+  expect(missing).toEqual([]);
+});
+
+test("API.md limitations match what the admin endpoints actually return", () => {
+  const section = apiDoc.slice(apiDoc.indexOf("### Limitations"), apiDoc.indexOf("## Deliberately not in the HTTP API"));
+  expect(section.length).toBeGreaterThan(100);
+  for (const phrase of [
+    "Only web actions made while signed in carry a verified account",
+    "allowlisted email",
+    "shared fallback token",
+    "not who made the console change",
+  ]) {
+    expect(adminPy, `code no longer says: ${phrase}`).toContain(phrase);
+    expect(section, `API.md limitations missing: ${phrase}`).toContain(phrase);
+  }
+  expect(section).not.toMatch(/no per-admin identity/i); // sign-in gives per-admin identity
+  expect(section).not.toMatch(/A reporter is self-reported;/); // signed-in web actions are verified
 });

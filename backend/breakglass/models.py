@@ -272,7 +272,7 @@ class EventOut(BaseModel):
     run_id: str | None
     kind: EventKind
     actor: str | None
-    actor_assurance: str   # "self-reported" | "local-os-user (not verified)" | "system"
+    actor_assurance: str   # "self-reported" | "local-os-user (not verified)" | "system" | "google-account (verified sign-in)"
     data: dict
     created_at: datetime
 
@@ -345,7 +345,7 @@ class AdminEventOut(BaseModel):
     run_id: str | None
     resource_addresses: list[str]
     actor: str | None
-    actor_assurance: str      # "self-reported" | "local-os-user (not verified)" | "system"
+    actor_assurance: str      # "self-reported" | "local-os-user (not verified)" | "system" | "google-account (verified sign-in)"
     outcome: RunOutcome | None  # run_finished / run_unfinished only
     plan_fingerprint: str | None  # review / run_started: the exact plan that was reviewed
     detail: str | None
