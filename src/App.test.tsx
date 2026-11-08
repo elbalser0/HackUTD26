@@ -258,22 +258,22 @@ test("report save failure keeps text and says not saved", async () => {
   expect(screen.getByLabelText(/What did you change/)).toHaveValue("why");
 });
 
-test("intent does not resolve; keep shows the manual suggestion", async () => {
+test("saving a report does not resolve; a keep decided at apply time shows the manual suggestion", async () => {
   window.location.hash = "#/records/r1";
   setAdapter(
     stub({
       report: async (_i, b) =>
-        rec({ reporter: b.reporter, reason: b.reason, intent: b.intent }),
+        rec({ reporter: b.reporter, reason: b.reason, intent: "keep" }),
     }),
   );
   render(<App />);
   fireEvent.change(await screen.findByLabelText(/What did you change/), {
     target: { value: "kept on purpose" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Keep" }));
   expect(
     screen.getByText(/does not resolve the record or change anything/),
   ).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "Intent" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Save report" }));
   expect(await screen.findByText(/by hand/)).toBeInTheDocument();
   expect(screen.queryByText(/This record is resolved/)).toBeNull();
@@ -293,7 +293,7 @@ test("resolved record closes the forms", async () => {
   );
   render(<App />);
   expect(
-    await screen.findByText(/reports and intent changes are closed/),
+    await screen.findByText(/reports are closed/),
   ).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Save report" })).toBeNull();
 });

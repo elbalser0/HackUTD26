@@ -5,7 +5,7 @@ so nothing is applied unless the human types an explicit confirmation here.
 Running Terraform directly bypasses this wrapper (documented limitation).
 
 PRD v3:
-- R6/R10: every wrapper decision (keep, defer, cancel, revert, override, bypass)
+- R6/R10: every wrapper decision (keep, cancel, revert, bypass)
   is appended to the events table; nothing earlier is overwritten.
 - R7: the review decision, rationale, reviewer and exact plan fingerprint are
   persisted in ONE transaction BEFORE terraform runs. If that write fails,
@@ -339,7 +339,7 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
             for line in _prior_decisions(db, r["id"]):
                 out(f"    prior: {line}")
         out("")
-        choice = prompt("[k]eep change (no apply) / [r]evert it (apply) / [d]efer / [c]ancel / [o]verride: ").strip().lower()
+        choice = prompt("[k]eep change (no apply) / [r]evert it (apply) / [c]ancel: ").strip().lower()
 
         if choice in ("k", "keep"):
             rationale = _ask_rationale(ctx)
@@ -354,14 +354,6 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
             out("Kept. Nothing applied. Edit the Terraform config, then run `argus apply` "
                 "(records the live value in state) and `argus recheck`.")
             return finish(AckOutcome.KEPT, check, warn_texts)
-        if choice in ("d", "defer"):
-            rationale = _ask_rationale(ctx)
-            if rationale is None:
-                return _cancel(ctx, finish, affected, check, warn_texts, ask=False,
-                               note="defer not saved: no rationale given")
-            ctx.review("defer", affected, intent=Intent.DEFER, rationale=rationale)
-            out("Deferred. Nothing applied.")
-            return finish(AckOutcome.DEFERRED, check, warn_texts)
         if choice in ("r", "revert"):
             ans = prompt("Type 'revert' to apply this exact saved plan and undo the live change(s): ").strip()
             if ans != "revert":
@@ -375,16 +367,6 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
             return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.REVERTED_APPLIED,
                                 decision="revert", rows=affected, rationale=rationale, intent=Intent.REVERT,
                                 note=nc_note)
-        if choice in ("o", "override"):
-            ans = prompt("Type 'override' to apply despite the warning (this is recorded): ").strip()
-            if ans != "override":
-                return _cancel(ctx, finish, affected, check, warn_texts)
-            rationale = _ask_rationale(ctx)
-            if rationale is None:
-                ctx.review("cancel", affected)
-                return finish(AckOutcome.CANCELLED, check, warn_texts, note="no rationale given")
-            return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.OVERRIDE_APPLIED,
-                                decision="override", rows=affected, rationale=rationale, note=nc_note)
         return _cancel(ctx, finish, affected, check, warn_texts)
 
     if not_checked:

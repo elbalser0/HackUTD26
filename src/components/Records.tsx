@@ -6,7 +6,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, api } from "../api";
-import type { EmergencyRecord, Intent, RecordEvent } from "../api";
+import type { EmergencyRecord, RecordEvent } from "../api";
 import { useAuth } from "../auth";
 import {
   age,
@@ -231,8 +231,8 @@ function Panel({
       {closed ? (
         <Notice tone="info">
           This record is resolved
-          {r.resolutionReason ? ` (${r.resolutionReason})` : ""}; reports and
-          intent changes are closed.
+          {r.resolutionReason ? ` (${r.resolutionReason})` : ""}; reports are
+          closed.
         </Notice>
       ) : (
         <ReportForm r={r} onSaved={onSaved} />
@@ -264,12 +264,6 @@ function writeError(err: unknown): string {
   return err instanceof Error ? err.message : "unknown error";
 }
 
-const INTENTS: { label: string; value: Intent }[] = [
-  { label: "Keep", value: "keep" },
-  { label: "Revert", value: "revert" },
-  { label: "Undecided", value: "unsure" },
-];
-
 function ReportForm({
   r,
   onSaved,
@@ -279,11 +273,6 @@ function ReportForm({
 }) {
   const { user } = useAuth();
   const [reason, setReason] = useState(r.reason ?? "");
-  const [intent, setIntent] = useState<Intent | null>(
-    r.intent === "keep" || r.intent === "revert" || r.intent === "unsure"
-      ? r.intent
-      : null,
-  );
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -299,7 +288,6 @@ function ReportForm({
       const saved = await api.report(r.id, {
         reporter: null,
         reason: reason.trim(),
-        ...(intent ? { intent } : {}),
       });
       setMsg({ ok: true, text: "Saved." });
       onSaved(saved);
@@ -327,26 +315,15 @@ function ReportForm({
         />
       </div>
       <div className="row between">
-        <div className="seg" role="group" aria-label="Intent">
-          {INTENTS.map((i) => (
-            <button
-              type="button"
-              key={i.value}
-              aria-pressed={intent === i.value}
-              onClick={() => setIntent(intent === i.value ? null : i.value)}
-            >
-              {i.label}
-            </button>
-          ))}
-        </div>
+        <span />
         <button className="btn primary" type="submit" disabled={busy}>
           {busy ? "Saving…" : "Save report"}
         </button>
       </div>
       <div className="sub">
         {user ? `Saving as ${user.email}. ` : ""}
-        This shows who submitted it, not who made the change. Recording an
-        intent does not resolve the record or change anything.
+        This shows who submitted it, not who made the change. Saving a report
+        does not resolve the record or change anything.
       </div>
       {r.reportedAt && (
         <div className="sub">

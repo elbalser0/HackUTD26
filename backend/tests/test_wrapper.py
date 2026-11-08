@@ -46,13 +46,6 @@ def test_keep_choice_kept_no_apply(db, tmp_path):
     assert "WARNING" in s.output and "payment webhook blocked" in s.output
 
 
-def test_defer_choice_no_apply(db, tmp_path):
-    rid = open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("d", "ask Paul tomorrow"))
-    assert res.outcome == "deferred" and runner.apply_calls == []
-    assert db.get_record(rid)["intent"] == "defer"
-
-
 @pytest.mark.parametrize("answers", [("c",), ("zzz",), ()], ids=["cancel", "unknown", "eof"])
 def test_cancel_unknown_eof_no_apply(db, tmp_path, answers):
     rid = open_record(db)
@@ -79,19 +72,6 @@ def test_revert_confirmed_applies_once_with_exact_args(db, tmp_path):
     assert db.get_record(rid)["resolution"] == "open"  # applying never resolves
 
 
-def test_override_confirmed_applies_once(db, tmp_path):
-    open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "override", "approved by lead"))
-    assert res.outcome == "override_applied"
-    assert runner.apply_calls == [EXPECTED_APPLY_ARGS]
-
-
-def test_override_wrong_confirmation_cancels(db, tmp_path):
-    open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "yes"))
-    assert res.outcome == "cancelled" and runner.apply_calls == []
-
-
 def test_missing_reason_still_warns(db, tmp_path):
     open_record(db, reason=False)
     s = Script("c")
@@ -103,7 +83,7 @@ def test_missing_reason_still_warns(db, tmp_path):
 
 def test_apply_failure_exit_code(db, tmp_path):
     open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "override", "approved by lead"), apply_exit=1)
+    res, runner, _ = run(db, tmp_path, Script("r", "revert", "approved by lead"), apply_exit=1)
     assert res.outcome == "failed" and not res.applied
     assert len(runner.apply_calls) == 1
 
@@ -309,3 +289,10 @@ def test_warning_output_strips_control_chars_from_legacy_rows(db, tmp_path):
     s = Script("c")
     run(db, tmp_path, s)
     assert "" not in s.output and "evil?[2Kline" in s.output
+
+
+@pytest.mark.parametrize("choice", ["d", "defer", "o", "override"])
+def test_removed_choices_are_unrecognised_and_cancel_without_applying(db, tmp_path, choice):
+    open_record(db)
+    res, runner, _ = run(db, tmp_path, Script(choice, "override", "approved by lead"))
+    assert res.outcome == "cancelled" and runner.apply_calls == []

@@ -199,11 +199,9 @@ const OUTCOMES: RunOutcome[] = [
   "failed",
   "cancelled",
   "kept",
-  "deferred",
   "no_changes",
   "applied_no_warnings",
   "reverted_applied",
-  "override_applied",
   "unverified_bypass_applied",
   "aborted_plan_changed",
 ];

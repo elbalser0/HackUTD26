@@ -233,7 +233,7 @@ def test_persist_failure_via_review_raising(db, tmp_path, monkeypatch):
         return orig(self, decision, rows, **kw)
 
     monkeypatch.setattr(wrapper._Ctx, "review", boom)
-    s = Script("o", "override", "approved by lead")
+    s = Script("r", "revert", "approved by lead")
     res, runner, _ = run(db, tmp_path, s)
     assert runner.apply_calls == [] and res.outcome == "failed"
     assert "could not be persisted" in db.get_apply_run(res.run_id)["ack_note"]
@@ -256,13 +256,6 @@ def test_revert_eof_at_rationale_cancels(db, tmp_path):
     assert all(e.data["decision"] != "revert" for e in reviews(db, rid))
 
 
-def test_override_without_rationale_cancels(db, tmp_path):
-    rid = open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "override", ""))
-    assert res.outcome == "cancelled" and runner.apply_calls == []
-    assert [e.data["decision"] for e in reviews(db, rid)] == ["cancel"]
-
-
 @pytest.mark.parametrize("bad", ["ok\x1b[31m", "line\nbreak", "nul\x00"], ids=["esc", "newline", "nul"])
 def test_rationale_with_control_chars_rejected(db, tmp_path, bad):
     rid = open_record(db)
@@ -273,9 +266,9 @@ def test_rationale_with_control_chars_rejected(db, tmp_path, bad):
 
 
 @pytest.mark.parametrize("choice,decision,intent", [
-    ("k", "keep", "keep"), ("d", "defer", "defer"), ("c", "cancel", "unset"),
+    ("k", "keep", "keep"), ("c", "cancel", "unset"),
 ])
-def test_keep_defer_cancel_append_one_review(db, tmp_path, choice, decision, intent):
+def test_keep_and_cancel_append_one_review(db, tmp_path, choice, decision, intent):
     rid = open_record(db)
     res, runner, _ = run(db, tmp_path, Script(choice, "test rationale"))
     assert runner.apply_calls == []
