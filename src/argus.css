@@ -97,7 +97,8 @@
   .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
   .tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 3px; background: var(--raised); border: 1px solid var(--border); font-size: 11px; color: var(--muted); white-space: nowrap; }
   .tag.blue { color: #cfe8ff; background: var(--accent-soft); border-color: var(--accent-line); }
-  .tag.amber { color: var(--amber); border-color: #5c4a1c; background: #1b160a; }
+  .tag.amber { color: var(--amber); border-color: #5c4a1c; background: #1b160a; text-decoration: none; }
+  a.role:hover { border-color: var(--amber); }
   .tag.green { color: var(--green); border-color: #1f4a39; background: #0b1914; }
   .link { color: var(--accent); font-size: 13px; display: inline-flex; align-items: center; min-height: 44px; }
 
