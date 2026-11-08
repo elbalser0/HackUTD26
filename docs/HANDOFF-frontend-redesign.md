@@ -1,33 +1,24 @@
 # Handoff: Argus front-end rebuild (next agent starts here)
 
-Rewritten 2026-11-08 after the employee flow, role detection, palette, admin Overview, All records and the admin
-Record page were built. Read this top to bottom; it is meant to be enough on its own. `docs/HANDOFF.md` is the older
+Read this top to bottom; it is meant to be enough on its own. `docs/HANDOFF.md` is the older
 project handoff and still describes the pre-redesign UI.
 
 ## 1. Where things stand
 
-Branch `feat/tiger-cloud`, **pushed, and open as one PR: https://github.com/elbalser0/HackUTD26/pull/26 (into `main`)**. Tree clean when this was written. Main (PRs #23 to #25: CLI
-polish, dotenv, personas backend) is already merged in.
-
-| Commit | What |
-|---|---|
-| `1b41f56` | Tiger Cloud (TimescaleDB) persistence, `GET /api/admin/analytics`, migrations, this handoff |
-| `0f625e3` | Employee Records page |
-| `b4532d8` | Merge of `origin/main` |
-| `27e29f1` | Role detection via `/api/me`, employee command palette |
-| `c5739a3` | Admin shell and Overview |
-| `8c0463a` | Admin All records (Records and Events views) |
-| `15da602` | Admin Record page (read-only) |
+**PR #26 is merged into `main` (merge commit `1cd91c5`, 2026-11-08, CI green).** It carried the Tiger Cloud backend, the whole
+front-end redesign and the slices below. `feat/tiger-cloud` is merged and finished; branch new work off `main`. Rewritten
+2026-11-08 after the admin palette, KPI links, cleanup, phone pass and a live check against Tiger.
 
 ### Built (front end, all in `src/`)
 | Screen | Route | Notes |
 |---|---|---|
 | Employee Records | `#/` and `#/records/<id>` | Top bar (logo, "Search records ⌘K", Admin link for admins, account menu), tabs Needs a reason / Explained / Resolved with counts, list + detail panel, report form (reason + Keep/Revert/Undecided, Undecided sends `unsure`), collapsed History. `components/Records.tsx` |
-| Employee palette | ⌘K / Ctrl+K anywhere on the employee page | Client-side search over the loaded records (resource, summary, who explained it; not the reason text) plus the three filters. `components/Palette.tsx`, `palette.ts`, `paletteContext.ts`, `components/PaletteContext.tsx` |
-| Admin Overview | `#/admin` | KPIs, "Open without a reason", hourly chart (bars with events link to the Events view), run outcomes. From `/api/admin/overview`. `components/Overview.tsx`, `overview.ts` |
-| Admin All records | `#/admin/records`, `#/admin/events` (`?hour=<ISO>`) | Records view: live client-side filters. Events view: server-side filters via Apply; hour chip comes from the URL. `components/AllRecords.tsx`, `allRecords.ts`, `events.ts` |
-| Admin Record | `#/admin/records/<id>` | Read-only: Explained by + reliability, Intent + when set, Linked run, What changed, Full history (newest first), Gaps, limitations. `components/AdminRecord.tsx` |
-| Admin shell | wraps the three admin pages | ADMIN sidebar (Overview, All records), Admin badge. `components/AdminShell.tsx` |
+| Employee palette | ⌘K / Ctrl+K | Client-side over the loaded records (resource, summary, who explained it; not the reason text) plus the three filters. `components/Palette.tsx`, `palette.ts`, `paletteContext.ts`, `components/PaletteContext.tsx` |
+| Admin Overview | `#/admin` | KPIs, "Open without a reason", hourly chart (bars with events open that hour in Events), run outcomes. **KPIs link:** Open records to All records; Last apply and Events to Events; the Unknown outcome row to Events; "All records" in the card head. Last scan is not a link. `components/Overview.tsx`, `overview.ts` |
+| Admin All records | `#/admin/records`, `#/admin/events` (`?hour=<ISO>`) | Records view: live client-side filters. Events view: server-side filters via Apply. `components/AllRecords.tsx`, `allRecords.ts`, `events.ts` |
+| Admin Record | `#/admin/records/<id>` | Read-only: explained by, intent, linked run, what changed, full history (newest first), gaps, limitations. `components/AdminRecord.tsx` |
+| Admin palette | ⌘K in the admin shell; "Search records and events ⌘K" button in the top bar | Records, events, and a "Go to" group (Overview, All records). **Event search is client-side** (the user chose this over a server `q`): records and the first 100 events (`GET /api/admin/log`, default limit) are fetched when the palette opens. "No match" says it only covers what was loaded, and the Events group says how many of how many were searched. Enter on an event opens its record, or the Events view at that hour when it has no record. `components/AdminPalette.tsx`, `PaletteParts.tsx` (Highlight), `paletteRows.ts` (tag and meta text), `palette.ts` (`eventMatches`, `eventHash`, `GO_TO`) |
+| Admin shell | wraps the admin pages | ADMIN sidebar (Overview, All records), Admin badge, owns its own `PaletteProvider`. `components/AdminShell.tsx` |
 
 **Who gets what:** `components/TopBar.tsx` and `AdminHome` in `src/App.tsx` call `api.me()` (`GET /api/me`). Only
 `role === "admin"` gets the admin shell. Anyone else, **and any `/api/me` failure**, gets the old token-gated admin screen
@@ -35,23 +26,45 @@ polish, dotenv, personas backend) is already merged in.
 access on every route. The same `AdminHome` element serves every admin path so the legacy screen keeps its in-memory
 token when you move between `#/admin` and a record timeline (a test guards this).
 
+**Shared admin token (decided 2026-11-08, option 1):** `BG_ADMIN_TOKEN` stays on the server as the offline fallback and is
+used only through the old `Admin.tsx` screen. The new shell does not accept it (it cannot read `/api/records`). It is the
+only admin path when Firebase is not configured. Removing it would be its own backend slice (`auth.py`, `api.py`,
+`config.py`, `demo.py`, tests on SQLite and Postgres, docs) and only makes sense if the demo always has Firebase.
+
 ### Test and check commands (repo root)
 ```
-npm test          # vitest: 245 passing when last run (11 files)
+npm test          # vitest: 276 passing when last run (14 files)
 npm run lint      # oxlint, clean
 npm run build     # tsc -b && vite build, ok
-cd backend && .venv/bin/python -m pytest -q     # SQLite only; Postgres cases skip. 486 passed, 39 skipped
+cd backend && .venv/bin/python -m pytest -q     # SQLite only; Postgres cases skip. 486 passed, 39 skipped (not re-run in the 2026-11-08 front-end work)
 BG_TEST_DATABASE_URL=postgresql://postgres:test@127.0.0.1:54329/postgres .venv/bin/python -m pytest -q   # 486 passed, 1 skipped
 BG_TEST_BACKEND=postgres BG_TEST_DATABASE_URL=... .venv/bin/python -m pytest -q   # whole suite on Postgres
 ```
 The local TimescaleDB is a Docker container, `argus-tsdb-test`, port 54329 (`docker start argus-tsdb-test` if stopped).
 `src/docs.test.ts` guards doc wording (for example the product is "Argus", never "Break-Glass", in prose), so run
-`npm test` after any doc edit.
+`npm test` after any doc edit. `src/argusMobile.test.ts` reads `argus.css` as text and guards the phone rules (44px tap
+targets, wrapping of long names and hashes, `.top` height, `.tag` wrapping); `src/mobile.test.ts` does the same for `App.css`.
 
-**What has NOT been verified:** nothing front-end has run against the real API on Tiger. Everything was checked with stub
-adapters (vitest) and the fixture adapter in Chrome at desktop width (`?fixture` = employee, `?fixture=admin` = admin).
-**Phone width was only checked for the employee Records page**, not for the palette, Overview, All records or Record page.
-Not verified live: the Google-admin path, 401/403/503 in the new screens, the real `/api/me` and `/api/admin/overview`.
+### What is verified, and how
+**Live (2026-11-08): real API on Tiger Cloud, Chrome at desktop width, signed in with Google, first as a non-admin and then as an admin.**
+- `/api/me` role detection. A non-admin got a real `403 not_admin` and the UI failed closed to the old token screen.
+- Employee Records page on real Tiger records, no Admin link.
+- Admin Overview, All records, Events, Record page and the admin palette on real data (events from several real actors, with "verified sign-in" vs "self-reported" vs "local user, not verified").
+- 375 and 320 px (in iframes in the signed-in tab, not a real phone): no horizontal overflow on Overview, All records, Events, the admin Record page and the employee page.
+- Real data found three bugs that fixtures hid (a plan hash and a long resource name that did not wrap, the legacy `header { height: 58px }` in `App.css` clipping the wrapped top bar, a clipped DEMO DATA tag). Fixed and guarded in `argusMobile.test.ts`.
+
+**Stubs and fixtures only:** every unit and component behaviour (vitest stub adapters), and the fixture adapter in Chrome.
+
+**NOT verified live:**
+- The 503 `storage_unavailable` state in the new screens (needs the API stopped or its database unreachable).
+- A real unknown run outcome (the real data has Cancelled and Kept runs only).
+- The shared-token screen, and the employee palette on real data.
+- A real phone. Tables use `.scroll-x`; inline resource links in table rows are still about 15px tall.
+- Backend side: API analytics and overview over HTTP against Tiger under load, read-only service behaviour, a real Terraform apply (none authorized).
+
+**Gotcha found 2026-11-08:** a stale `uvicorn` from before the main merge was still on port 8000. It had no `/api/me` or
+`/api/admin/overview` and served `/api/records` without a token. Check `lsof -nP -iTCP:8000 -sTCP:LISTEN` and
+`curl /api/me` before blaming the UI. The first palette load on Tiger took a few seconds (two requests); not measured.
 
 ## 2. Rules the user has set (follow these)
 - **Never read, grep, cat or source `.env`.** Give the user a command to run instead, for example
@@ -82,7 +95,7 @@ Canvas: **https://claude.ai/artifact/2VqyQppbv3TyULPiHyv3pe** (Design artifact).
 | `AdminRecords.dc.html` | Admin All records, Records view | yes |
 | `AdminLog.dc.html` | Admin All records, Events view | yes |
 | `Record.dc.html` | Admin record | yes |
-| `AdminPalette.dc.html` | Admin palette | **no, next** |
+| `AdminPalette.dc.html` | Admin palette | yes |
 
 Look: dark NMC style, Roboto, accent `#2b9cfc`, surface `#101216`, border `#272b32`.
 
@@ -90,7 +103,7 @@ Look: dark NMC style, Roboto, accent `#2b9cfc`, surface `#101216`, border `#272b
 1. Two role-separated flows. Admin = email in `BG_ADMIN_EMAILS` (Firebase) or the shared `BG_ADMIN_TOKEN`.
 2. Employee view: no sidebar; all open records are visible (the open question "all or only theirs?" is still unanswered by the user; the build assumes all).
 3. Admin view: sidebar ADMIN with Overview and All records only; read-only; no edit form. The old separate "Activity log" page is gone; Events live under All records.
-4. Palette on every screen. Employee: records + the three filters only. **Admin (not built): records, events, and a "Go to" group (Overview, All records).** Large data should eventually search server-side (`q`), client-side first.
+4. Palette on every screen. Employee: records + the three filters only. Admin (built): records, events, and a "Go to" group (Overview, All records). Large data should eventually search server-side (`q`), client-side first.
 5. Copy rules: short; no marketing paragraphs; always say detected time is "when the scanner noticed, not when the change was made"; reports show who *submitted*, never who made the change; "counts events, not incidents"; **unknown outcome is never failure**.
 6. Overview chart: selecting a bar opens that hour in the Events view (decided and built; chip clears it).
 
@@ -98,8 +111,7 @@ Look: dark NMC style, Roboto, accent `#2b9cfc`, surface `#101216`, border `#272b
 - No sidebar count badge on All records and no "Events · N" in the view switch (each needs an extra request). The Records tab does show its count.
 - Records filters apply live (no Apply button); Events filters use Apply.
 - Range on the Events view has an "All time" option and is disabled while an hour chip is active.
-- Overview KPIs are not links (their targets did not exist when it was built). **They can be linked now:** Open records -> `#/admin/records`, Last apply and Events -> `#/admin/events`. Check the current `Main.dc.html` first.
-- The admin shell has no search button yet (palette not built).
+- (Resolved) Overview KPIs now link as the current `Main.dc.html` draws them.
 
 ### Fixture data is made up
 `?fixture` data in `src/fixtures.ts` is fake, including `adminOverview`, `adminEvents`, `adminRecordTimeline` (the fixture
@@ -113,19 +125,19 @@ chart hours do not line up with the fixture events, so clicking a bar shows 0 ma
 - All wire knowledge lives in `src/api.ts` (snake_case in, camelCase out; `fromWire*`). Adapters: real, fixture (`?fixture`), and a `setAdapter` test hook. `Adapter` methods are all required, so any new one must also be added to every test stub (five test files build full adapters; most spread `fixtureAdapter` now).
 
 ## 5. What to do next (suggested order)
-1. **Admin ⌘K palette** (`AdminPalette.dc.html`; read it first). Records (matching resource, summary or who explained it), events, and a "Go to" group (Overview, All records). Reuse `Palette.tsx` / `paletteContext.ts`; the employee palette is client-side over `listRecords`. Events need the admin log (`adminEvents`), so decide with the user: search the already-loaded page of events client-side first, or add a server `q`. Add the "Search records and events ⌘K" button to the admin top bar in `AdminShell.tsx`. Tests: open/close, arrows, Enter, focus trap, Esc, groups with counts, and that an employee never gets the admin groups.
-2. **Link the Overview KPIs** (see deviations) once the user confirms against the current canvas.
-3. **Phone-width pass** (375 and 320 px) for the palette, Overview, All records (tables use `.scroll-x`), and the admin Record page; `src/mobile.test.ts` only reads `App.css` as text and guards nothing in `argus.css`. Consider tap targets >= 44 px.
-4. **Shared-token admin:** the offline fallback still works only through the old `Admin.tsx` screen (token held in React state, never URL or storage). Decide with the user whether the new admin shell should accept it (it cannot read `/api/records`; `/api/me` reports admin only if a Bearer shared token is sent).
-5. **Cleanup:** `components/RecordDetail.tsx` is now unused (dead code); `RecordList.tsx` is only used for its `Freshness` export (move it); `Admin.tsx` is still used by non-admins. Remove only with the user's OK and keep `src/App.test.tsx` / `admin.test.tsx` meaningful. `App.css` still styles the apply-run page and legacy admin screens (`/#/apply/<id>` still uses the old layout, not redesigned).
-6. **Verify live** (user runs the API; see section 7): desktop and phone widths, 401/403/503 in the new screens, a real unknown run outcome, the Google-admin path.
-7. **Docs:** update `docs/FRONTEND.md` (still describes the pre-redesign UI and a different branch), `docs/API.md` (UI routes if any), `README.md`, honestly, then run `npm test` (`src/docs.test.ts`). Also open on the backend side (not front-end work): bounded admin reads, a TimescaleDB CI job, a Tiger runbook, a non-DDL runtime DB role; see git history of this file for the old list.
+Done 2026-11-08: admin palette, linked KPIs, phone pass (admin and employee, fixtures and real data), shared-token decision,
+dead-code cleanup (`RecordDetail.tsx`, `RecordList.tsx` removed; `Freshness` in `components/Freshness.tsx`), `docs/FRONTEND.md`
+and `README.md`.
+1. **Finish the live check** (user runs the API, see section 7): the 503 state, a real unknown run outcome, the employee palette on real data, and a real phone if one is available. The Google sign-in needs the user; do not sign in for them.
+2. **Table tap targets:** inline resource links inside table rows are about 15px tall; enlarging them needs a row layout decision (`AllRecords.tsx` sets `minHeight: 0` deliberately).
+3. **Apply-run page** (`#/apply/<id>`) still uses the old layout and `App.css`; `Admin.tsx` and the legacy admin styles remain for non-admins. Redesign only if the user asks.
+4. **Optional:** server-side `q` on `GET /api/admin/log` if client-side search over 100 events proves too narrow (backend change, tests on SQLite and Postgres, `docs/API.md`). Bounded admin reads, a TimescaleDB CI job, a Tiger runbook and a non-DDL runtime DB role are also still open on the backend side.
+5. **Docs:** `docs/API.md` has no UI routes; add only if the user wants them.
 
 ## 6. Open questions for the user
-- Employee visibility: all open records (built) or only ones they reported? Reports are self-declared, so "mine" is not trustworthy.
-- Admin palette: is client-side search over the first 100 loaded events acceptable, or do they want server-side `q` now?
-- Should the Overview KPIs link to All records / Events (targets exist now)?
-- Push and PR: **done, one PR (#26)** for the whole branch (Tiger backend + UI redesign). Do not split it. Further commits on `feat/tiger-cloud` go into that PR; push only when the user asks. Merge only when asked (`gh pr merge --merge`).
+- Employee visibility: all open records (built) or only ones they reported? Reports are self-declared, so "mine" is not trustworthy. Still unanswered.
+- Should the shared admin token be removed entirely later (backend slice)? Depends on whether the demo always has Firebase.
+- Commit, push, PR and merge only when asked. The user has been saying "commit this", "push", "merge" after each slice.
 
 ## 7. How to run things
 - API against Tiger (user runs it, from repo root): `! set -a && . ./.env && set +a && cd backend && .venv/bin/uvicorn breakglass.api:app --port 8000`
