@@ -16,7 +16,8 @@ dependencies = [
 dev = ["pytest>=8", "httpx>=0.27"]
 
 [project.scripts]
-breakglass = "breakglass.cli:main"
+argus = "breakglass.cli:main"
+breakglass = "breakglass.cli:main"  # original name, kept so nothing breaks
 
 [build-system]
 requires = ["setuptools>=68"]

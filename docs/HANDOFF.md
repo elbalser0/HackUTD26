@@ -4,7 +4,7 @@ Written 2026-11-07 after PR #11; updated after PR #21 (admin dashboard UI, keep/
 
 ## What this is
 
-**Argus** (HackUTD26, NMC² challenge). When an engineer changes infrastructure by hand during an incident, a later `terraform apply` can silently undo it. The backend detects the manual change from a Terraform refresh-only plan, stores the explanation, and the guarded `breakglass apply` wrapper pauses an apply that would reverse it, requiring an explicit decision. History is append-only. The web UI is read-only and never runs Terraform. Demo target: one DigitalOcean firewall (`digitalocean_firewall.demo`, "break-glass-demo") in `break-glass-infra/`.
+**Argus** (HackUTD26, NMC² challenge). When an engineer changes infrastructure by hand during an incident, a later `terraform apply` can silently undo it. The backend detects the manual change from a Terraform refresh-only plan, stores the explanation, and the guarded `argus apply` wrapper pauses an apply that would reverse it, requiring an explicit decision. History is append-only. The web UI is read-only and never runs Terraform. Demo target: one DigitalOcean firewall (`digitalocean_firewall.demo`, "break-glass-demo") in `break-glass-infra/`.
 
 Team: Daniel (product, frontend; the only machine that holds the Terraform state), Samuel (backend), Andrew (infrastructure). Either Daniel or Samuel may be the user you are working with; check the git user. Real Terraform steps run only on Daniel's machine.
 
@@ -25,8 +25,8 @@ These came from corrections and approvals in earlier sessions. Follow them.
 |---|---|---|
 | Detector, matcher, rules | `backend/breakglass/{detector,matcher,rules,suggest}.py` | Only `digitalocean_firewall` `inbound_rule` is interpreted; anything else is reported as unsupported, never as "no drift". Null and empty collections compare equal (`detector._empty_is_none`). |
 | Records, append-only events, runs | `db.py`, `service.py`, SQLite | Reports, decisions, wrapper reviews and run start/finish are never overwritten. |
-| Guarded apply wrapper | `wrapper.py`, CLI `breakglass apply` | Review (decision, rationale, reviewer, plan fingerprint) is saved in one transaction with the run marked `running` before Terraform runs. Runs with no recorded completion become `unknown`. Keep and defer require a rationale (otherwise the run is recorded as a cancel); cancel never does. |
-| Demo reset | `demo.py`, CLI `breakglass demo-reset` | Typed confirmation, wipes local demo data, checks the Terraform dir, token presence, admin auth and API, then runs a read-only refresh-only plan (never applied, never ingested). Leftover drift exits 2; a failed check is "could not verify", never clean. |
+| Guarded apply wrapper | `wrapper.py`, CLI `argus apply` | Review (decision, rationale, reviewer, plan fingerprint) is saved in one transaction with the run marked `running` before Terraform runs. Runs with no recorded completion become `unknown`. Keep and defer require a rationale (otherwise the run is recorded as a cancel); cancel never does. |
+| Demo reset | `demo.py`, CLI `argus demo-reset` | Typed confirmation, wipes local demo data, checks the Terraform dir, token presence, admin auth and API, then runs a read-only refresh-only plan (never applied, never ingested). Leftover drift exits 2; a failed check is "could not verify", never clean. |
 | Database | `backend/breakglass.db` (SQLite, WAL; `BG_DB_PATH` overrides) | Tables `records`, `apply_runs`, `events` (append-only), `scans`. Persists across restarts; local to one machine, no shared store. |
 | Google sign-in | `auth.py`, `src/auth.ts`, `src/components/AuthProvider.tsx` | Off unless `BG_FIREBASE_PROJECT_ID` is set. Then web writes need a verified-email Firebase ID token (401/403 with distinct codes) and record the email as `google-account (verified sign-in)`; reads need any verified sign-in (or the shared token), `/api/health` stays open. `GET /api/me` returns the persona (`admin` | `employee`). Full-page sign-in, header account menu (photo, name and email; Sign out in a dropdown), session ends when the tab closes; a fresh ID token per write, none stored. The Firebase web config (`VITE_FIREBASE_*`) is public. |
 | HTTP API | `api.py`, `docs/API.md` | Read plus annotate only; no route runs Terraform. |
@@ -46,7 +46,7 @@ Two personas (employee, admin) for the redesign: `GET /api/me` decides the role 
 - The UI (LIVE API badge) and the admin log over HTTP showed the real record and runs for two actors, with the reviewed plan fingerprint; the admin API returns 401 without a token.
 - The admin dashboard UI against the real backend with a throwaway `BG_ADMIN_TOKEN` (2026-11-07, real browser, no Terraform or cloud access): wrong token shows "Token rejected" (401), no server token shows "not configured" (403), the real spike record and the authored record appear with actor assurance labels, engineer and outcome filters work, a record timeline shows the real history through `verified_aligned`, an unknown record id shows "not found", and the token is forgotten on reload. Re-checked on `main` after the Google sign-in UI merged (shared-token path): each finished run shows its outcome once.
 - Not yet seen live in the admin dashboard: an `unknown` outcome and the timeline gaps box (the data has no unfinished run, and creating one needs a real interrupted apply), and the Google-admin path (needs a Firebase project; the team ran the sign-in itself).
-- After the rule was deleted, `breakglass recheck` resolved the record as `verified_aligned` with its history intact (R11).
+- After the rule was deleted, `argus recheck` resolved the record as `verified_aligned` with its history intact (R11).
 - One real bug was found and fixed: the provider reports `droplet_ids` and `tags` as `null` in older state and `[]` live, which made recheck refuse to resolve any record.
 
 **Not yet run for real** (mocked or authored tests only), starting with a confirmed revert or override apply:
@@ -68,7 +68,7 @@ cd backend
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 python -m pytest -q                       # offline; Terraform is mocked
-breakglass seed-demo --with-report        # AUTHORED data, environment "demo-authored"
+argus seed-demo --with-report        # AUTHORED data, environment "demo-authored"
 uvicorn breakglass.api:app --port 8000
 ```
 
@@ -88,8 +88,8 @@ The user's token lives in `.env` and you must not touch it. Pattern that worked:
 1. Write the commands into a small script (no secrets in it) that does `set -a; . ./.env; set +a` itself, and have the user run `! bash /path/to/script.sh`.
 2. The `!` must be the **first character** of the line, with no leading space, and the input box in shell mode. A pasted line that wraps splits the command (this once ran `terraform show -json` with no file and printed state to the screen). A script file avoids both problems. If the reply comes back as plain text with no `<bash-input>` block, it did not run.
 3. `!` commands run in the session's working directory. Don't leave the session `cd`'d into a subfolder, or `./.env` won't be found.
-4. For `breakglass apply`, close stdin (`< /dev/null`) so every prompt hits end-of-input, which the wrapper treats as cancel. That shows the warning screen and can never apply. `printf 'k\nreason here\n' | breakglass apply` answers keep (keep and defer require a rationale; without one the run is cancelled). Never supply `r` or `o` without approval.
-5. `breakglass scan --no-prompt` skips the reason questions (a non-interactive scan prints the `report` command instead); add the reason with `breakglass report <id> --reporter "Name (demo)" --reason "..."`. Use fake demo names.
+4. For `argus apply`, close stdin (`< /dev/null`) so every prompt hits end-of-input, which the wrapper treats as cancel. That shows the warning screen and can never apply. `printf 'k\nreason here\n' | argus apply` answers keep (keep and defer require a rationale; without one the run is cancelled). Never supply `r` or `o` without approval.
+5. `argus scan --no-prompt` skips the reason questions (a non-interactive scan prints the `report` command instead); add the reason with `argus report <id> --reporter "Name (demo)" --reason "..."`. Use fake demo names.
 6. Capture plans into `break-glass-infra/raw/` (gitignored): `terraform plan -refresh-only -out=scan.tfplan`, `terraform show -json scan.tfplan > raw/scan.json`, and the same for a normal `plan`. Never apply those plans. Delete them and `raw/` afterwards; they hold the real IP and firewall id.
 7. To make a fixture: replace every IPv4, UUID and long number with fakes, keep the structure byte-for-byte, and prove programmatically that no original value remains. See `backend/tests/fixtures/real/README.md`.
 
@@ -99,7 +99,7 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 
 - **Naming:** the product is **Argus**. Only user-facing text and the docs were renamed. Deliberately unchanged: the Python package and CLI (`breakglass`), `BG_*` env vars, the `break-glass-infra/` directory, the real cloud firewall name `break-glass-demo` (renaming it would change a cloud resource), and the PRD filename (links and tests point at it). Don't rename those without the user asking.
 
-- One machine owns the Terraform state (the user's). Starting `breakglass apply` marks any other unfinished run in the same environment `unknown`, so run it from one terminal.
+- One machine owns the Terraform state (the user's). Starting `argus apply` marks any other unfinished run in the same environment `unknown`, so run it from one terminal.
 - The firewall is not attached to the droplet (`attach_firewall = false`), so console edits to it affect no live traffic. The user's DigitalOcean console edits are theirs to make; don't do them through the browser unless told.
 - Authored and replayed data go to `<env>-authored` and `<env>-replay` and can never merge with or resolve live records. `--label` is required for `--from-json`.
 - **macOS:** `sed -i` needs an empty suffix argument (`sed -i '' ...`); the Linux form fails silently. Python edits were more reliable. zsh also errors on unmatched globs such as `--include=*.tsx`; quote them.
@@ -108,11 +108,11 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 - **Visual check of signed-in UI without Firebase:** make a temporary preview page (a second HTML entry plus a small `.tsx`) that calls `setAuthClient` with a fake client and renders `<App />`, view it on a spare Vite port, then delete both files. Never commit it.
 - **Docs-vs-code guards:** `src/docs.test.ts` reads the backend source, so a new `BG_*` env var must appear in `docs/BACKEND.md`, a new route needs its own heading in `docs/API.md`, and the `API.md` limitations must match `admin.py`. Don't put test counts in docs; they go stale on every PR.
 - `docs/PROJECT.md` carries the status table against R1-R12 and the next decision gate. Keep it, `docs/BACKEND.md` and the README in step with the code. The docs tests will fail on stale claims.
-- The demo record and its history are in the local `backend/breakglass.db` (gitignored). `breakglass reset-db --yes` clears it.
+- The demo record and its history are in the local `backend/breakglass.db` (gitignored). `argus reset-db --yes` clears it.
 
 ## Next steps
 
-0. **CLI handoff real run (Daniel's machine):** the scan → "Why was this change needed?" → apply-warning flow is verified offline (`tests/test_cli_handoff.py`) but not yet run on real Terraform with the new prompt. Checklist: console-add tcp 8443, `breakglass scan` and answer, `breakglass list`, `breakglass apply < /dev/null` shows the exact reason; repeat skipping the reason (warning says "no reason recorded"); delete the console rules and `breakglass recheck`. No apply. Then Tiger Cloud (shared Postgres) is planned next.
+0. **CLI handoff real run (Daniel's machine):** the scan → "Why was this change needed?" → apply-warning flow is verified offline (`tests/test_cli_handoff.py`) but not yet run on real Terraform with the new prompt. Checklist: console-add tcp 8443, `argus scan` and answer, `argus list`, `argus apply < /dev/null` shows the exact reason; repeat skipping the reason (warning says "no reason recorded"); delete the console rules and `argus recheck`. No apply. Then Tiger Cloud (shared Postgres) is planned next.
 1. **Google sign-in UI improvements**: the team ran it and it works; they plan to improve it. Wait for their direction. Then run the admin dashboard with a signed-in admin email (the shared-token path already ran against the real backend; see "What is verified"). Bearer header only, never in a URL.
 2. **Optional real spike items, each needing approval:** a confirmed revert or override apply (reviewed-plan execution, changed-plan abort), the keep-path state sync (H5), and capturing a drift-free refresh-only plan (likely needs `terraform apply` of a refresh-only plan to clear the provider noise in state; that changes state only).
 3. **Decisions for the user:** whether the shared `BG_ADMIN_TOKEN` fallback stays now that per-admin sign-in exists, whether the local SQLite file is enough or the history needs a shared store, retention, and the 409/422 UI states.

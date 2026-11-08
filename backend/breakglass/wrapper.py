@@ -137,7 +137,7 @@ def guarded_apply(db: Database, tf: Terraform, environment: str,
         except Exception as e:
             out(f"WARNING: outcome '{outcome.value}' could not be recorded ({type(e).__name__}). "
                 + ("Terraform DID apply. " if applied else "")
-                + "The run will show as unknown; run `breakglass scan` and `breakglass recheck`.")
+                + "The run will show as unknown; run `argus scan` and `argus recheck`.")
         ctx.finished, ctx.result = True, result
         out(f"[apply run {run_id}] outcome: {outcome.value}")
         return result
@@ -150,7 +150,7 @@ def guarded_apply(db: Database, tf: Terraform, environment: str,
             return ctx.result
         if ctx.apply_started:
             out("\nINTERRUPTED after terraform apply started. Live state is unknown: "
-                "run `breakglass scan` and `breakglass recheck`.")
+                "run `argus scan` and `argus recheck`.")
             return finish(AckOutcome.FAILED, CheckStatus.FAILED, [],
                           note="interrupted after apply started; live state unknown")
         out("\nCancelled. Nothing applied.")
@@ -351,8 +351,8 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
                 s = suggest.suggest_literal_edit(tf.tf_dir, r["resource_address"],
                                                  rule_from_json(r["baseline_json"]), rule_from_json(r["observed_json"]))
                 out(s if s else f"No single literal edit found for {r['resource_address']}; update the Terraform rule by hand.")
-            out("Kept. Nothing applied. Edit the Terraform config, then run `breakglass apply` "
-                "(records the live value in state) and `breakglass recheck`.")
+            out("Kept. Nothing applied. Edit the Terraform config, then run `argus apply` "
+                "(records the live value in state) and `argus recheck`.")
             return finish(AckOutcome.KEPT, check, warn_texts)
         if choice in ("d", "defer"):
             rationale = _ask_rationale(ctx)
@@ -411,7 +411,7 @@ def _apply_exact(ctx: _Ctx, cfg_hash, workspace, finish, check, warn_texts, outc
     except (TerraformError, OSError):
         unchanged = False
     if not unchanged:
-        out("ABORTED: plan file, config, or workspace changed since review. Re-run `breakglass apply` to replan.")
+        out("ABORTED: plan file, config, or workspace changed since review. Re-run `argus apply` to replan.")
         return finish(AckOutcome.ABORTED_PLAN_CHANGED, check, warn_texts, note=note)
 
     # PRD R7: persist the decision (linked to this exact plan) BEFORE terraform runs.
@@ -427,10 +427,10 @@ def _apply_exact(ctx: _Ctx, cfg_hash, workspace, finish, check, warn_texts, outc
         code = tf.apply_saved(APPLY_PLAN)
     except (KeyboardInterrupt, TerraformError, OSError) as e:
         out(f"INTERRUPTED/FAILED DURING APPLY ({type(e).__name__}). Live state is unknown: "
-            "run `breakglass scan` and `breakglass recheck`.")
+            "run `argus scan` and `argus recheck`.")
         return finish(AckOutcome.FAILED, check, warn_texts, note="interrupted during apply; live state unknown")
     if code != 0:
-        out(f"terraform apply failed (exit {code}). Live state may be partially changed; run `breakglass scan`.")
+        out(f"terraform apply failed (exit {code}). Live state may be partially changed; run `argus scan`.")
         return finish(AckOutcome.FAILED, check, warn_texts, note=f"apply exit {code}")
-    out("Applied. Run `breakglass recheck` to verify and resolve records.")
+    out("Applied. Run `argus recheck` to verify and resolve records.")
     return finish(outcome, check, warn_texts, applied=True, note=note)

@@ -124,7 +124,7 @@ class PostgresDatabase:
                 except pgerr.UndefinedTable:
                     row = {"v": None}
         if row["v"] is None or row["v"] < latest_version():
-            raise StorageUnavailable("database schema is not migrated; run `breakglass migrate-schema`")
+            raise StorageUnavailable("database schema is not migrated; run `argus migrate-schema`")
 
     def close(self) -> None:
         self._pool.close()

@@ -1,4 +1,4 @@
-"""`breakglass` command-line interface.
+"""`argus` command-line interface (also installed as `breakglass`, the original name).
 
 Terraform-running commands (scan, apply, recheck) use only the server-configured
 Terraform directory (BG_TF_DIR, default break-glass-infra/). `--from-json` options read
@@ -78,7 +78,7 @@ def prompt_for_reasons(db: Database, record_ids: list[str], ask: Callable[[str],
         key = ask("Keep it, revert it, or unsure? [k/r/u, Enter=skip]: ").strip().lower()[:1]
         service.report(db, rid, ReportIn(reporter=reporter, reason=reason[:500], intent=INTENT_KEYS.get(key)),
                        source="cli")
-        out("Saved (self-reported). A later `breakglass apply` that would undo this change will show this reason.")
+        out("Saved (self-reported). A later `argus apply` that would undo this change will show this reason.")
 
 
 def _hint_unexplained(db: Database, record_ids: list[str], out: Callable[[str], None] = print) -> None:
@@ -88,7 +88,7 @@ def _hint_unexplained(db: Database, record_ids: list[str], out: Callable[[str], 
         if row is None or row["reason"] or row["resolution"] != "open":
             continue
         out(f"Not an interactive terminal, so no reason was asked for {rid}. Add one with: "
-            f'breakglass report {rid} --reason "..." --reporter "..."')
+            f'argus report {rid} --reason "..." --reporter "..."')
 
 
 # --------------------------------------------------------------------------
@@ -239,6 +239,24 @@ def cmd_seed_demo(args, db: Database, settings) -> int:
     return 0
 
 
+def cmd_seed_history(args, db: Database, settings) -> int:
+    from . import seed_history
+    target = "the configured PostgreSQL (BG_DATABASE_URL)" if settings.database_url else str(settings.db_path)
+    env = env_for(settings, "authored-fixture")
+    if not args.yes:
+        print(f"This would write a week of AUTHORED demo history (environment {env}) into {target}.")
+        print("Nothing was written. Re-run with --yes to do it.")
+        return 1
+    try:
+        s = seed_history.seed_history(db, env)
+    except seed_history.SeedHistoryRefused as e:
+        print(f"refused: {e}")
+        return 1
+    print(f"Seeded AUTHORED demo history into {target} (environment={env}, evidence_source=authored-fixture): "
+          f"{s.records} records ({s.open} open, {s.needs_reason} without a reason), {s.runs} apply runs, {s.scans} scans.")
+    return 0
+
+
 def cmd_reset_db(args, db: Database, settings) -> int:
     if not args.yes:
         print("Refusing to delete all records without --yes.")
@@ -293,7 +311,7 @@ def cmd_demo_reset(args, db: Database, settings) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="breakglass", description="Argus: emergency-change context for Terraform applies.")
+    p = argparse.ArgumentParser(prog="argus", description="Argus: emergency-change context for Terraform applies.")
     sub = p.add_subparsers(dest="command", required=True)
 
     s = sub.add_parser("scan", help="detect manual changes with a Terraform refresh-only plan (never applied)")
@@ -341,6 +359,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("seed-demo", help="load AUTHORED demo data for frontend integration")
     s.add_argument("--with-report", action="store_true", help="also add a sample self-reported reason")
     s.set_defaults(func=cmd_seed_demo)
+
+    s = sub.add_parser("seed-history", help="load a week of AUTHORED demo history (records, reports, runs) for the presentation")
+    s.add_argument("--yes", action="store_true", help="actually write; without it nothing is written")
+    s.set_defaults(func=cmd_seed_history)
 
     s = sub.add_parser("reset-db", help="delete all records and apply runs")
     s.add_argument("--yes", action="store_true")

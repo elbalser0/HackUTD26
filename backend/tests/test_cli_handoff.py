@@ -106,7 +106,7 @@ def test_scan_without_a_terminal_says_how_to_add_the_reason(db_path, monkeypatch
         d.close()
     assert row["reason"] is None
     assert "Not an interactive terminal" in out
-    assert f"breakglass report {row['id']} --reason" in out
+    assert f"argus report {row['id']} --reason" in out
 
 
 def test_no_prompt_flag_stays_quiet(db_path, monkeypatch, capsys):
