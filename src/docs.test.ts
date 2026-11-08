@@ -108,7 +108,7 @@ test("PROJECT.md no longer calls detection, the pause and closure unverified on 
 test("README says the admin dashboard UI ran against the real backend with a throwaway token, and what was not run live (PRD R9)", () => {
   expect(readme).toMatch(/admin log API/i);
   expect(readme).toContain("BG_ADMIN_TOKEN");
-  expect(readme).toMatch(/admin dashboard UI[^|]*\| `src\/components\/Admin.tsx`/i);
+  expect(readme).toMatch(/admin dashboard UI[^|]*\| `src\/components\/AdminShell.tsx`/i);
   expect(readme).not.toMatch(/not yet run against the real backend/i);
   expect(readme).toMatch(/throwaway[^|]*token/i);
   expect(readme).toMatch(/Not yet run live:[^|]*Google[^|]*unknown[^|]*gaps/i);

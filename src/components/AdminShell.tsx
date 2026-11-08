@@ -67,18 +67,6 @@ export function AdminShell({
               </a>
             </nav>
           </div>
-          <div>
-            <div className="nav-label">SWITCH VIEW</div>
-            <nav className="nav" aria-label="Switch view">
-              <a href="#/">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 21c0-4 4-6 8-6s8 2 8 6" />
-                </svg>
-                Employee view
-              </a>
-            </nav>
-          </div>
         </aside>
         <div className="main">
           <header className="top">
@@ -97,7 +85,9 @@ export function AdminShell({
             </div>
             <div className="top-right">
               <SearchButton />
-              <span className="role">Admin</span>
+              <a className="role" href="#/" title="Switch to employee view">
+                Admin
+              </a>
               <AccountBar />
             </div>
           </header>
