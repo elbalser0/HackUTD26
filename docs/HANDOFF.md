@@ -1,6 +1,6 @@
 # Handoff for the next agent
 
-Written 2026-11-07 after PR #11; updated after PR #19 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in, rename to Argus and logo). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
+Written 2026-11-07 after PR #11; updated after PR #21 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in, rename to Argus, logo, consolidated account menu). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
 
 ## What this is
 
@@ -19,7 +19,7 @@ These came from corrections and approvals in earlier sessions. Follow them.
 - **Be honest about verification.** Say what ran on real Terraform, what ran only against authored fixtures or a mocked runner, and what has not run. Don't report acceptance criteria as done unless they were verified.
 - Keep answers short. Recommend, don't survey. Refer to people with they/them unless told otherwise.
 
-## State of the code (main, after PR #19)
+## State of the code (main, after PR #21)
 
 | Piece | Where | Notes |
 |---|---|---|
@@ -31,7 +31,7 @@ These came from corrections and approvals in earlier sessions. Follow them.
 | Google sign-in | `auth.py`, `src/auth.ts`, `src/components/AuthProvider.tsx` | Off unless `BG_FIREBASE_PROJECT_ID` is set. Then web writes need a verified-email Firebase ID token (401/403 with distinct codes) and record the email as `google-account (verified sign-in)`; reads stay open. Full-page sign-in, header account menu (photo, name and email; Sign out in a dropdown), session ends when the tab closes; a fresh ID token per write, none stored. The Firebase web config (`VITE_FIREBASE_*`) is public. |
 | HTTP API | `api.py`, `docs/API.md` | Read plus annotate only; no route runs Terraform. |
 | Admin log (PRD R9 backend) | `admin.py`, `/api/admin/log`, `/api/admin/records/{id}/timeline` | Fails closed. Accepts a Firebase sign-in whose email is in `BG_ADMIN_EMAILS` (signed-in non-admins get 403), or the shared fallback token `BG_ADMIN_TOKEN`. Reads events, records and runs. |
-| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` ("Continue as <email>" or the shared token; run against the real backend with a throwaway token; see "What is verified"). |
+| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Argus logo: the lockup `public/argus-logo.svg` (sidebar and sign-in page) and the eye-only `public/argus-mark.svg` (favicon); the old B² mark is gone and a test fails if it returns. Header account menu: one button (photo, name, email) whose dropdown holds Sign out; closes on a second click, Escape or an outside click; no "Verified Google account" badge (the report form still names the verified account that saves an explanation). Admin dashboard UI at `#/admin` ("Continue as <email>" or the shared token; run against the real backend with a throwaway token; see "What is verified"). |
 | Real captures and replay tests | `backend/tests/fixtures/real/`, `tests/test_real_replay.py` | Sanitized (fake firewall id, `203.0.113.10`, fake droplet id). Its README lists what was replaced. |
 | CI | `.github/workflows/ci.yml` | Two jobs: frontend (`lint`, `test`, `build`) and `backend` (`pytest`, offline). |
 
@@ -55,7 +55,7 @@ The older `/api/records` and `/api/apply-runs` endpoints are still unauthenticat
 - A drift-free refresh-only plan. The provider noise kept `resource_drift` present in every capture, so the assumption that a missing key means no drift (open issue I2) is unchecked.
 - The 409 and 422 UI cases against the real backend.
 
-**Run by the team, not by an agent:** the Google sign-in UI against a real Firebase project (2026-11-07), reported working. The team plans to improve it.
+**Run by the team, not by an agent:** the Google sign-in UI against a real Firebase project (2026-11-07), reported working. The team plans to improve it. Real Google sign-in was not re-run after the account menu change: an agent only saw the menu in a real browser on a temporary preview page with a fake signed-in user (since deleted), so check one real sign-in and sign-out.
 
 Wrapper actors are self-reported or the local OS user (labelled "not verified"). Nothing here proves service health.
 
@@ -102,6 +102,11 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 - One machine owns the Terraform state (the user's). Starting `breakglass apply` marks any other unfinished run in the same environment `unknown`, so run it from one terminal.
 - The firewall is not attached to the droplet (`attach_firewall = false`), so console edits to it affect no live traffic. The user's DigitalOcean console edits are theirs to make; don't do them through the browser unless told.
 - Authored and replayed data go to `<env>-authored` and `<env>-replay` and can never merge with or resolve live records. `--label` is required for `--from-json`.
+- **macOS:** `sed -i` needs an empty suffix argument (`sed -i '' ...`); the Linux form fails silently. Python edits were more reliable. zsh also errors on unmatched globs such as `--include=*.tsx`; quote them.
+- **Ports:** another project's dev server can already hold port 5173 (check what owns a port with `lsof` before assuming it is this repo's, and don't kill things you did not start). Vite then picks 5174.
+- **Stale venv:** after pulling backend changes, run `pip install -e ".[dev]"` in `backend/.venv`, or tests fail to import new dependencies such as the Firebase packages. Pillow and numpy are not in the project venv; use a throwaway venv for image work.
+- **Visual check of signed-in UI without Firebase:** make a temporary preview page (a second HTML entry plus a small `.tsx`) that calls `setAuthClient` with a fake client and renders `<App />`, view it on a spare Vite port, then delete both files. Never commit it.
+- **Docs-vs-code guards:** `src/docs.test.ts` reads the backend source, so a new `BG_*` env var must appear in `docs/BACKEND.md`, a new route needs its own heading in `docs/API.md`, and the `API.md` limitations must match `admin.py`. Don't put test counts in docs; they go stale on every PR.
 - `docs/PROJECT.md` carries the status table against R1-R12 and the next decision gate. Keep it, `docs/BACKEND.md` and the README in step with the code. The docs tests will fail on stale claims.
 - The demo record and its history are in the local `backend/breakglass.db` (gitignored). `breakglass reset-db --yes` clears it.
 

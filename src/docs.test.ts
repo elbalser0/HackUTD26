@@ -255,3 +255,20 @@ test("the old logo asset is gone and the docs do not describe a B² mark", () =>
   expect(assets).toEqual(expect.arrayContaining(["../public/argus-logo.svg", "../public/argus-mark.svg"]));
   expect(readme).not.toMatch(/B²/);
 });
+
+// ---- handoff keeps the facts a fresh agent cannot get from the code alone ----
+test("handoff describes the account menu and the logo, and is honest that real sign-in was not re-run after the menu change", () => {
+  expect(handoff).toMatch(/account menu[^\n]*Sign out[^\n]*dropdown/i);
+  expect(handoff).toMatch(/public\/argus-logo\.svg/);
+  expect(handoff).toMatch(/public\/argus-mark\.svg/);
+  const verified = handoff.slice(handoff.indexOf("## What is verified"), handoff.indexOf("## Running things"));
+  expect(verified).toMatch(/not re-run[^\n]*(account menu|menu change)/i);
+});
+
+test("handoff carries the practical gotchas learned while building the UI", () => {
+  expect(handoff).toMatch(/sed -i/); // macOS BSD sed: the Linux form fails silently
+  expect(handoff).toMatch(/port 5173/i); // other projects' dev servers can hold it
+  expect(handoff).toMatch(/pip install -e/); // stale venv after pulling backend changes
+  expect(handoff).toMatch(/preview page[^\n]*fake/i); // visual check of signed-in UI without Firebase
+  expect(handoff).toMatch(/docs-vs-code|read the backend source/i); // the guard tests
+});
