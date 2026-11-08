@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usingFixtures } from "./api";
+import { AdminArea } from "./components/Admin";
 import { ApplyRunView } from "./components/ApplyRunView";
 import { RecordDetail } from "./components/RecordDetail";
 import { RecordList } from "./components/RecordList";
@@ -19,7 +20,14 @@ function App() {
   const path = useHashPath();
   const rec = path.match(/^\/records\/([^/]+)$/);
   const run = path.match(/^\/apply\/([^/]+)$/);
-  const crumb = run ? "Apply warning" : rec ? "Record" : "Open records";
+  const admin = path === "/admin" || /^\/admin\/records\/[^/]+$/.test(path);
+  const crumb = admin
+    ? "Admin log"
+    : run
+      ? "Apply warning"
+      : rec
+        ? "Record"
+        : "Open records";
   return (
     <div className="app">
       <a className="skip" href="#main">
@@ -35,7 +43,7 @@ function App() {
         </div>
         <nav aria-label="Main navigation">
           <button
-            aria-current={!run ? "page" : undefined}
+            aria-current={!run && !admin ? "page" : undefined}
             onClick={() => (window.location.hash = "#/")}
           >
             <span className="nav-icon" aria-hidden="true">
@@ -43,6 +51,16 @@ function App() {
             </span>
             Open records
           </button>
+          <a
+            className="nav-admin"
+            href="#/admin"
+            aria-current={admin ? "page" : undefined}
+          >
+            <span className="nav-icon" aria-hidden="true">
+              ◷
+            </span>
+            Admin log
+          </a>
         </nav>
         <div className="sidebar-bottom">
           <span className="small-dot" /> READ-ONLY UI
@@ -62,7 +80,9 @@ function App() {
           </span>
         </header>
         <main id="main">
-          {rec ? (
+          {admin ? (
+            <AdminArea path={path} />
+          ) : rec ? (
             <RecordDetail key={rec[1]} id={decodeURIComponent(rec[1])} />
           ) : run ? (
             <ApplyRunView key={run[1]} id={decodeURIComponent(run[1])} />

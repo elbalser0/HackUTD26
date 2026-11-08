@@ -28,7 +28,7 @@ These came from corrections and approvals in earlier sessions. Follow them.
 | Guarded apply wrapper | `wrapper.py`, CLI `breakglass apply` | Review (decision, rationale, reviewer, plan fingerprint) is saved in one transaction with the run marked `running` before Terraform runs. Runs with no recorded completion become `unknown`. |
 | HTTP API | `api.py`, `docs/API.md` | Read plus annotate only; no route runs Terraform. |
 | Admin log (PRD R9 backend) | `admin.py`, `/api/admin/log`, `/api/admin/records/{id}/timeline` | Bearer token from `BG_ADMIN_TOKEN`, fails closed, one shared token (no per-admin identity). Reads events, records and runs. |
-| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. **No admin dashboard UI yet.** |
+| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` (branch `feat/admin-dashboard-ui`; verified with stubs and fixtures only). |
 | Real captures and replay tests | `backend/tests/fixtures/real/`, `tests/test_real_replay.py` | Sanitized (fake firewall id, `203.0.113.10`, fake droplet id). Its README lists what was replaced. |
 | CI | `.github/workflows/ci.yml` | Two jobs: frontend (`lint`, `test`, `build`) and `backend` (`pytest`, offline). |
 
@@ -98,7 +98,7 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 
 ## Next steps
 
-1. **Admin dashboard UI (PRD R9 UI)**, the largest core piece not started. Build it test-first over `/api/admin/log` and `/api/admin/records/{id}/timeline`. It needs a design for supplying `BG_ADMIN_TOKEN` (bearer header only; don't put it in a URL; think about where it is held in the browser). Show actors with their assurance label, `unknown` outcomes plainly, and the `gaps` and `limitations` the API returns. Filters are engineer, resource, time and outcome.
+1. **Admin dashboard UI (PRD R9 UI)**: built; next, run it against the real backend (`BG_ADMIN_TOKEN` throwaway). It was built test-first over `/api/admin/log` and `/api/admin/records/{id}/timeline`. It needs a design for supplying `BG_ADMIN_TOKEN` (bearer header only; don't put it in a URL; think about where it is held in the browser). Show actors with their assurance label, `unknown` outcomes plainly, and the `gaps` and `limitations` the API returns. Filters are engineer, resource, time and outcome.
 2. **Optional real spike items, each needing approval:** a confirmed revert or override apply (reviewed-plan execution, changed-plan abort), the keep-path state sync (H5), and capturing a drift-free refresh-only plan (likely needs `terraform apply` of a refresh-only plan to clear the provider noise in state; that changes state only).
 3. **Decisions for the user:** per-admin identity (the token is shared), whether `/api/records` and `/api/apply-runs` should also require authorization, retention, and the 409/422 UI states.
 4. **Later, only after the core demo works:** analytics and the classifier (PRD §7, proposed). The user asked to skip the demo script, fallback video and sponsor conversations for now; don't start them unprompted.

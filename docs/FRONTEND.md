@@ -12,7 +12,7 @@ Branch: `feat/break-glass-ui`. Stack: React + TS + Vite + Vitest. Contract: `doc
 - [x] Wire mapping against the real contract (`src/api.ts`)
 - [ ] Apply-run view against a REAL run (none exists; runs are created only by `breakglass apply` in the terminal, which needs real infra)
 - [x] Mobile layout check at 375px and 320px (fixture data): no horizontal overflow; tap targets >= 44px; breadcrumb shows the current page; back link spaced from the eyebrow
-- [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) not started
+- [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) built at `#/admin`: token held in memory only, never in URL or storage; verified with stub adapters and fixture data (`?fixture`, token `demo`), not against the real backend
 
 ## Running
 

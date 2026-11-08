@@ -41,7 +41,9 @@ nav {
   display: grid;
   gap: 7px;
 }
-nav button {
+nav button,
+nav a {
+  text-decoration: none;
   color: var(--muted);
   background: none;
   padding: 13px 12px;
@@ -53,7 +55,8 @@ nav button {
   border: 1px solid transparent;
   border-radius: 4px;
 }
-nav button[aria-current] {
+nav button[aria-current],
+nav a[aria-current] {
   color: #e8f4ff;
   background: #132336;
   border-color: #244765;
@@ -426,7 +429,8 @@ footer {
     gap: 6px;
     flex-wrap: wrap;
   }
-  nav button {
+  nav button,
+  nav a {
     padding: 9px;
     font-size: 12px;
   }
@@ -726,6 +730,7 @@ select:focus-visible {
 /* ---- Phone ergonomics (found in a 375px browser pass; guarded by mobile.test.ts) ---- */
 @media (max-width: 760px) {
   nav button,
+  nav a,
   .btn,
   .wordmark,
   input {

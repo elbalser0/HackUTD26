@@ -85,10 +85,12 @@ test("PROJECT.md no longer calls detection, the pause and closure unverified on 
   expect(project).toMatch(/null[^.]*empty/i); // the provider-noise finding is recorded
 });
 
-test("README says the admin log API exists but the dashboard UI is not built (PRD R9)", () => {
+test("README says the admin dashboard UI is built but not yet run against the real backend (PRD R9)", () => {
   expect(readme).toMatch(/admin log API/i);
   expect(readme).toContain("BG_ADMIN_TOKEN");
-  expect(readme).toMatch(/admin dashboard UI[^.]*not (yet )?(built|implemented)/i);
+  expect(readme).toMatch(/admin dashboard UI[^|]*\| `src\/components\/Admin.tsx`/i);
+  expect(readme).toMatch(/not yet run against the real backend/i);
+  expect(readme).not.toMatch(/admin dashboard UI[^|]*\|[^|]*Not built/i);
   expect(readme).toMatch(/analytics[^.]*(not (yet )?(built|implemented)|proposed)/i);
 });
 

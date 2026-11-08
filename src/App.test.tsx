@@ -69,6 +69,10 @@ function stub(o: Partial<Adapter>): Adapter {
       }),
     decide: async (_i, intent) => rec({ intent }),
     getApplyRun: async () => run(),
+    adminLog: async () => ({ events: [], totalMatching: 0, limitations: [] }),
+    adminTimeline: async () => {
+      throw new Error("unused");
+    },
     ...o,
   };
 }
