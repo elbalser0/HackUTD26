@@ -428,11 +428,25 @@ const TYPE_LABEL: Record<AdminEvent["type"], string> = {
   resolved: "resolved",
 };
 
+/**
+ * The backend writes "outcome: X" (optionally "— note") at the start of a run's
+ * detail. The outcome line below states it, so drop only that leading prefix;
+ * a note, or a "predates event history" label, still shows.
+ */
+function withoutOutcomePrefix(detail: string | null, outcome: string | null) {
+  if (!detail || !outcome) return detail;
+  const prefix = `outcome: ${outcome}`;
+  if (!detail.startsWith(prefix)) return detail;
+  const rest = detail.slice(prefix.length).replace(/^\s*—\s*/, "").trim();
+  return rest || null;
+}
+
 function EventRow({ e, timeline }: { e: AdminEvent; timeline?: boolean }) {
   const who =
     e.actor === null
       ? "recorded by the tool (system)"
       : `${e.actor} · ${e.actorAssurance}`;
+  const detail = withoutOutcomePrefix(e.detail, e.outcome);
   return (
     <li aria-label={`${TYPE_LABEL[e.type]} event`} className="card panel">
       <div className="card-top">
@@ -445,7 +459,7 @@ function EventRow({ e, timeline }: { e: AdminEvent; timeline?: boolean }) {
           <code>{e.resourceAddresses.join(", ")}</code>
         </div>
       )}
-      {e.detail && <p className="msg">{e.detail}</p>}
+      {detail && <p className="msg">{detail}</p>}
       {e.outcome && (
         <div className={e.outcome === "unknown" ? "meta bad" : "meta"}>
           outcome: {e.outcome}

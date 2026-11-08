@@ -5,6 +5,7 @@
 import { expect, test } from "vitest";
 import readme from "../README.md?raw";
 import project from "../docs/PROJECT.md?raw";
+import frontend from "../docs/FRONTEND.md?raw";
 import ci from "../.github/workflows/ci.yml?raw";
 import handoff from "../docs/HANDOFF.md?raw";
 
@@ -100,11 +101,13 @@ test("PROJECT.md no longer calls detection, the pause and closure unverified on 
   expect(project).toMatch(/null[^.]*empty/i); // the provider-noise finding is recorded
 });
 
-test("README says the admin dashboard UI is built but not yet run against the real backend (PRD R9)", () => {
+test("README says the admin dashboard UI ran against the real backend with a throwaway token, and what was not run live (PRD R9)", () => {
   expect(readme).toMatch(/admin log API/i);
   expect(readme).toContain("BG_ADMIN_TOKEN");
   expect(readme).toMatch(/admin dashboard UI[^|]*\| `src\/components\/Admin.tsx`/i);
-  expect(readme).toMatch(/not yet run against the real backend/i);
+  expect(readme).not.toMatch(/not yet run against the real backend/i);
+  expect(readme).toMatch(/throwaway[^|]*token/i);
+  expect(readme).toMatch(/Not yet run live:[^|]*Google[^|]*unknown[^|]*gaps/i);
   expect(readme).not.toMatch(/admin dashboard UI[^|]*\|[^|]*Not built/i);
   expect(readme).toMatch(/analytics[^.]*(not (yet )?(built|implemented)|proposed)/i);
 });
@@ -166,7 +169,20 @@ test("handoff separates what is verified on real Terraform from what is not", ()
   expect(handoff).toMatch(/drift-free/i);
 });
 
-test("handoff lists next steps including the unbuilt admin dashboard UI", () => {
+test("handoff records the live admin dashboard check and what it did not cover", () => {
+  const verified = handoff.slice(handoff.indexOf("## What is verified"), handoff.indexOf("## Running things"));
+  expect(verified).toMatch(/admin dashboard[^\n]*real backend[^\n]*throwaway/i);
+  expect(verified).toMatch(/not (yet )?(seen|run)[^\n]*live[^\n]*unknown[^\n]*gaps/i);
+  expect(verified).not.toMatch(/verified with stubs and fixtures only/i);
+});
+
+test("FRONTEND.md evidence is current: no stale test count, and the admin dashboard live check is recorded", () => {
+  expect(frontend).not.toMatch(/npm test`: 12 passed/);
+  expect(frontend).not.toMatch(/not against the real backend/i);
+  expect(frontend).toMatch(/admin dashboard[^\n]*real backend[^\n]*throwaway/i);
+});
+
+test("handoff lists next steps that name the admin dashboard follow-ups", () => {
   expect(handoff).toMatch(/## Next steps/i);
   expect(handoff).toMatch(/admin dashboard UI/i);
   expect(handoff).toMatch(/BG_ADMIN_TOKEN/);
