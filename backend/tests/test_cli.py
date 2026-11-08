@@ -167,3 +167,19 @@ def test_default_tf_dir_is_break_glass_infra(monkeypatch):
     from breakglass import config
     monkeypatch.delenv("BG_TF_DIR", raising=False)
     assert config.DEFAULT_TF_DIR.name == "break-glass-infra"
+
+
+def test_demo_reset_cli_requires_confirmation(db_path, monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _: "no")
+    cli.main(["seed-demo"])
+    assert cli.main(["demo-reset", "--skip-cloud-check"]) == 1
+    assert len(_open_rows(db_path)) == 1
+
+
+def test_demo_reset_cli_yes_skip_cloud(db_path, capsys):
+    cli.main(["seed-demo"])
+    code = cli.main(["demo-reset", "--yes", "--skip-cloud-check"])
+    assert _open_rows(db_path) == []
+    out = capsys.readouterr().out
+    assert "skipped" in out.lower() and "NOT verified" in out
+    assert code in (0, 1)  # 1 only if no Terraform directory exists in this checkout

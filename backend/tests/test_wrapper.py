@@ -37,7 +37,7 @@ def run(db, tmp_path, script, **runner_kw):
 
 def test_keep_choice_kept_no_apply(db, tmp_path):
     rid = open_record(db)
-    s = Script("k")
+    s = Script("k", "vendor still on 8443")
     res, runner, _ = run(db, tmp_path, s)
     assert res.outcome == "kept" and not res.applied
     assert runner.apply_calls == []
@@ -48,7 +48,7 @@ def test_keep_choice_kept_no_apply(db, tmp_path):
 
 def test_defer_choice_no_apply(db, tmp_path):
     rid = open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("d"))
+    res, runner, _ = run(db, tmp_path, Script("d", "ask Paul tomorrow"))
     assert res.outcome == "deferred" and runner.apply_calls == []
     assert db.get_record(rid)["intent"] == "defer"
 
@@ -257,7 +257,7 @@ def test_plan_files_deleted_after_run(db, tmp_path, answers):
 
 def test_apply_run_row_persisted(db, tmp_path):
     rid = open_record(db)
-    res, _, _ = run(db, tmp_path, Script("k"))
+    res, _, _ = run(db, tmp_path, Script("k", "vendor still on 8443"))
     row = db.get_apply_run(res.run_id)
     assert row["ack_outcome"] == "kept"
     assert row["completed_at"] is not None and row["completed_at"].endswith("Z")

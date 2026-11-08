@@ -184,11 +184,31 @@ def _prior_decisions(db: Database, record_id: str, limit: int = 3) -> list[str]:
 
 
 def _ask_rationale(ctx: _Ctx) -> str | None:
+    """Required rationale (PRD §6 step 7). None means the decision must not be saved."""
     text = ctx.prompt("Short rationale for this decision (required, saved with it): ").strip()
     if not text or has_control(text):
-        ctx.out("A rationale is required to proceed (no control characters). Nothing applied.")
+        ctx.out("A rationale is required for this decision (no control characters). Nothing applied.")
         return None
     return text[:500]
+
+
+def _ask_cancel_rationale(ctx: _Ctx) -> str | None:
+    """Cancel asks for a rationale but never requires one: cancelling is the safe
+    default and must never be blocked. Closed input (EOF) also just cancels."""
+    try:
+        text = ctx.prompt("Short rationale for cancelling (Enter to skip): ").strip()
+    except EOFError:
+        return None
+    if not text or has_control(text):
+        return None
+    return text[:500]
+
+
+def _cancel(ctx: _Ctx, finish, affected, check, warn_texts, *, ask: bool = True, note: str | None = None):
+    rationale = _ask_cancel_rationale(ctx) if (ask and affected) else None
+    ctx.review("cancel", affected, rationale=rationale)
+    ctx.out("Cancelled. Nothing applied.")
+    return finish(AckOutcome.CANCELLED, check, warn_texts, note=note)
 
 
 def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
@@ -300,9 +320,7 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
             out(f"  ! {safe(w.message)}")
         ans = prompt(f"Type '{BYPASS_PHRASE}' to apply this saved plan anyway (anything else cancels): ").strip()
         if ans != BYPASS_PHRASE:
-            ctx.review("cancel", affected)
-            out("Cancelled. Nothing applied.")
-            return finish(AckOutcome.CANCELLED, check, warn_texts)
+            return _cancel(ctx, finish, affected, check, warn_texts)
         rationale = _ask_rationale(ctx)
         if rationale is None:
             ctx.review("cancel", affected)
@@ -324,7 +342,11 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
         choice = prompt("[k]eep change (no apply) / [r]evert it (apply) / [d]efer / [c]ancel / [o]verride: ").strip().lower()
 
         if choice in ("k", "keep"):
-            ctx.review("keep", affected, intent=Intent.KEEP)
+            rationale = _ask_rationale(ctx)
+            if rationale is None:
+                return _cancel(ctx, finish, affected, check, warn_texts, ask=False,
+                               note="keep not saved: no rationale given")
+            ctx.review("keep", affected, intent=Intent.KEEP, rationale=rationale)
             for r in affected:
                 s = suggest.suggest_literal_edit(tf.tf_dir, r["resource_address"],
                                                  rule_from_json(r["baseline_json"]), rule_from_json(r["observed_json"]))
@@ -333,7 +355,11 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
                 "(records the live value in state) and `breakglass recheck`.")
             return finish(AckOutcome.KEPT, check, warn_texts)
         if choice in ("d", "defer"):
-            ctx.review("defer", affected, intent=Intent.DEFER)
+            rationale = _ask_rationale(ctx)
+            if rationale is None:
+                return _cancel(ctx, finish, affected, check, warn_texts, ask=False,
+                               note="defer not saved: no rationale given")
+            ctx.review("defer", affected, intent=Intent.DEFER, rationale=rationale)
             out("Deferred. Nothing applied.")
             return finish(AckOutcome.DEFERRED, check, warn_texts)
         if choice in ("r", "revert"):
@@ -352,18 +378,14 @@ def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
         if choice in ("o", "override"):
             ans = prompt("Type 'override' to apply despite the warning (this is recorded): ").strip()
             if ans != "override":
-                ctx.review("cancel", affected)
-                out("Cancelled. Nothing applied.")
-                return finish(AckOutcome.CANCELLED, check, warn_texts)
+                return _cancel(ctx, finish, affected, check, warn_texts)
             rationale = _ask_rationale(ctx)
             if rationale is None:
                 ctx.review("cancel", affected)
                 return finish(AckOutcome.CANCELLED, check, warn_texts, note="no rationale given")
             return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.OVERRIDE_APPLIED,
                                 decision="override", rows=affected, rationale=rationale, note=nc_note)
-        ctx.review("cancel", affected)
-        out("Cancelled. Nothing applied.")
-        return finish(AckOutcome.CANCELLED, check, warn_texts)
+        return _cancel(ctx, finish, affected, check, warn_texts)
 
     if not_checked:
         out(f"No supported emergency changes are reversed by this plan, but {len(not_checked)} "
