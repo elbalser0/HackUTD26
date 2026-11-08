@@ -166,6 +166,12 @@
     .split-list { max-width: none; border-right: 0; border-bottom: 1px solid var(--border); }
     .split-detail { padding: 20px 16px; }
     h1 { font-size: 28px; }
+    .crumbs a, .top .chip, .top .brand, a.item, .nav a { min-height: 44px; }
+    .crumbs a, .top .brand, a.item, .nav a { display: inline-flex; align-items: center; }
+    .top .chip { height: auto; }
+    .mono, h1.mono, .m, .sub { overflow-wrap: anywhere; }
+    .top { height: auto; padding-top: 12px; padding-bottom: 12px; }
+    .tag { white-space: normal; max-width: 100%; overflow-wrap: anywhere; }
   }
 }
 
