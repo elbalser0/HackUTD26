@@ -187,15 +187,15 @@ test("the view switch links Records and Events, with a record count once known",
   expect(sw.getByRole("link", { name: "Events" })).toHaveAttribute("href", "#/admin/events");
 });
 
-test("an employee at #/admin/records or #/admin/events gets the token gate and no admin data is requested", async () => {
+test("an employee at #/admin/records or #/admin/events is sent to the records page and no admin data is requested", async () => {
   const adminEvents = vi.fn(async () => log());
   setAdapter(stub({ adminEvents }, { ...admin, role: "employee" }));
   render(<App />);
-  expect(await screen.findByLabelText("Admin token")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe("#/"));
   cleanup();
   window.location.hash = "#/admin/events";
   render(<App />);
-  expect(await screen.findByLabelText("Admin token")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe("#/"));
   expect(adminEvents).not.toHaveBeenCalled();
 });
 
@@ -439,7 +439,7 @@ test("no events says so without claiming nothing happened", async () => {
   expect(screen.getByText(/does not prove nothing happened/i)).toBeInTheDocument();
 });
 
-test("a failed events load is an error with retry, and the server's limitations show on success", async () => {
+test("a failed events load is an error with retry", async () => {
   const adminEvents = vi
     .fn<Adapter["adminEvents"]>()
     .mockRejectedValueOnce(new ApiError("Backend unavailable", 503, "storage_unavailable"))
@@ -449,7 +449,8 @@ test("a failed events load is an error with retry, and the server's limitations 
   render(<App />);
   expect(await screen.findByRole("alert")).toHaveTextContent(/backend unavailable/i);
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-  expect(await screen.findByText(/Actors are not verified identities/)).toBeInTheDocument();
+  expect(await screen.findByRole("region", { name: "Events" })).toBeInTheDocument();
+  expect(screen.queryByText(/Actors are not verified identities/)).toBeNull();
 });
 
 test("switching views keeps you in the admin shell", async () => {

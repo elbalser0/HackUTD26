@@ -8,8 +8,7 @@ import { AdminShell } from "./components/AdminShell";
 import { AdminRecord } from "./components/AdminRecord";
 import { AllRecords } from "./components/AllRecords";
 import { Overview } from "./components/Overview";
-import { Loading } from "./components/States";
-import { AdminArea } from "./components/Admin";
+import { ErrorState, Loading } from "./components/States";
 import { ApplyRunView } from "./components/ApplyRunView";
 import { PaletteProvider } from "./components/PaletteContext";
 import { TopBar } from "./components/TopBar";
@@ -27,16 +26,12 @@ function useHashPath() {
   return h;
 }
 
-/** The original layout, still used by the apply-run page and the token-gated admin screens. */
+/** The original layout, still used by the apply-run page. */
 function LegacyLayout({
   crumb,
-  admin,
-  run,
   children,
 }: {
   crumb: string;
-  admin: boolean;
-  run: boolean;
   children: ReactNode;
 }) {
   return (
@@ -53,7 +48,7 @@ function LegacyLayout({
         </div>
         <nav aria-label="Main navigation">
           <button
-            aria-current={!run && !admin ? "page" : undefined}
+            
             onClick={() => (window.location.hash = "#/")}
           >
             <span className="nav-icon" aria-hidden="true">
@@ -61,16 +56,6 @@ function LegacyLayout({
             </span>
             Open records
           </button>
-          <a
-            className="nav-admin"
-            href="#/admin"
-            aria-current={admin ? "page" : undefined}
-          >
-            <span className="nav-icon" aria-hidden="true">
-              ◷
-            </span>
-            Admin log
-          </a>
         </nav>
         <div className="sidebar-bottom">
           <span className="small-dot" /> READ-ONLY UI
@@ -109,14 +94,26 @@ function LegacyLayout({
 }
 
 /**
- * #/admin. /api/me only picks the layout: an admin gets the new Overview; anyone
- * else, or any failure, gets the existing token-gated screen. The server still
- * enforces access on every admin route.
+ * #/admin. /api/me only picks the layout: an admin gets the admin screens;
+ * anyone else is sent to the employee records page. The server still enforces
+ * access on every admin route.
  */
 function AdminHome({ path, search }: { path: string; search: string }) {
   const { user } = useAuth();
-  const { s } = useAsync(() => api.me(), [user?.email]);
-  if (s.state === "loading")
+  const { s, reload } = useAsync(() => api.me(), [user?.email]);
+  const notAdmin = s.state === "ok" && s.data.role !== "admin";
+  useEffect(() => {
+    if (notAdmin) window.location.hash = "#/";
+  }, [notAdmin]);
+  if (s.state === "error")
+    return (
+      <div className="ar">
+        <main id="main" className="content">
+          <ErrorState error={s.error} onRetry={reload} />
+        </main>
+      </div>
+    );
+  if (s.state === "loading" || notAdmin)
     return (
       <div className="ar">
         <main id="main" className="content">
@@ -155,11 +152,7 @@ function AdminHome({ path, search }: { path: string; search: string }) {
         </AdminShell>
       );
   }
-  return (
-    <LegacyLayout crumb="Admin log" admin run={false}>
-      <AdminArea path={path} />
-    </LegacyLayout>
-  );
+  return null;
 }
 
 function App() {
@@ -175,14 +168,6 @@ function App() {
     path === "/admin/events" ||
     /^\/admin\/records\/[^/]+$/.test(path);
   const employee = !admin && !run;
-  const crumb = admin
-    ? "Admin log"
-    : run
-      ? "Apply warning"
-      : rec
-        ? "Record"
-        : "Open records";
-  // Same element for every admin path, so the token held in AdminArea survives navigation.
   if (admin)
     return (
       <AuthProvider>
@@ -212,12 +197,8 @@ function App() {
   return (
     <AuthProvider>
       <AuthGate>
-        <LegacyLayout crumb={crumb} admin={admin} run={!!run}>
-          {admin ? (
-            <AdminArea path={path} />
-          ) : (
-            <ApplyRunView key={run![1]} id={decodeURIComponent(run![1])} />
-          )}
+        <LegacyLayout crumb="Apply warning">
+          <ApplyRunView key={run![1]} id={decodeURIComponent(run![1])} />
         </LegacyLayout>
       </AuthGate>
     </AuthProvider>

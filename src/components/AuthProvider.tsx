@@ -2,8 +2,7 @@
  * React wiring for Google sign-in. Firebase itself lives in ../auth.ts.
  *
  * When sign-in is configured, the app sits behind a full sign-in page
- * (<AuthGate>). The only way past it without Google is the shared-token admin
- * fallback, kept for when Google sign-in is unreachable (e.g. venue Wi-Fi).
+ * (<AuthGate>).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -48,7 +47,7 @@ function signInMessage(e: unknown): string {
   const m = e instanceof Error ? e.message : "";
   if (/popup-closed|cancelled-popup/i.test(m)) return "Sign-in was cancelled.";
   if (/popup-blocked/i.test(m)) return "Your browser blocked the Google popup. Allow popups for this site and try again.";
-  if (/network/i.test(m)) return "Couldn't reach Google. Check the connection, or use offline admin access below.";
+  if (/network/i.test(m)) return "Couldn't reach Google. Check the connection and try again.";
   return "Sign-in failed. Try again.";
 }
 
@@ -91,7 +90,7 @@ export function GoogleButton({ label = "Sign in with Google" }: { label?: string
   );
 }
 
-function SignInPage({ onOffline }: { onOffline: () => void }) {
+function SignInPage() {
   return (
     <div className="signin-page">
       <section className="signin-card" aria-labelledby="signin-title">
@@ -111,9 +110,6 @@ function SignInPage({ onOffline }: { onOffline: () => void }) {
           <li>That shows who submitted an explanation, never who made the console change.</li>
           <li>You stay signed in until you close this tab.</li>
         </ul>
-        <button className="linkish" onClick={onOffline}>
-          Google sign-in unavailable? Admin offline access (shared token)
-        </button>
       </section>
     </div>
   );
@@ -122,8 +118,7 @@ function SignInPage({ onOffline }: { onOffline: () => void }) {
 /** Blocks the app behind the sign-in page when Firebase sign-in is configured. */
 export function AuthGate({ children }: { children: ReactNode }) {
   const { configured, ready, user } = useAuth();
-  const [offline, setOffline] = useState(false);
-  if (!configured || user || offline) return <>{children}</>;
+  if (!configured || user) return <>{children}</>;
   if (!ready)
     return (
       <div className="signin-page">
@@ -132,14 +127,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
         </p>
       </div>
     );
-  return (
-    <SignInPage
-      onOffline={() => {
-        window.location.hash = "#/admin";
-        setOffline(true);
-      }}
-    />
-  );
+  return <SignInPage />;
 }
 
 function initials(u: AuthUser): string {
@@ -180,7 +168,7 @@ export function AccountBar() {
   if (!user)
     return (
       <div className="account account-out">
-        <span className="account-state">Not signed in · offline admin access</span>
+        <span className="account-state">Not signed in</span>
         <GoogleButton label="Sign in" />
       </div>
     );

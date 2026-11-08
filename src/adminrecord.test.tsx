@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Admin Record page (read-only): GET /api/records/{id} + GET /api/admin/records/{id}/timeline.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import App from "./App";
 import { ApiError, api, fromWireRecord, setAdapter, setTokenProvider } from "./api";
@@ -157,11 +157,11 @@ test("an admin sees the record in the admin shell, read-only", async () => {
   expect(screen.getByText(/check current/i)).toBeInTheDocument();
 });
 
-test("an employee at an admin record URL gets the token gate and no admin data is requested", async () => {
+test("an employee at an admin record URL is sent to the records page and no admin data is requested", async () => {
   const tl = vi.fn(async () => timeline());
   setAdapter(stub({ adminRecordTimeline: tl }, { ...admin, role: "employee" }));
   render(<App />);
-  expect(await screen.findByLabelText("Admin token")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe("#/"));
   expect(tl).not.toHaveBeenCalled();
 });
 
@@ -350,11 +350,11 @@ test("gaps: no_reason_recorded and no_decision_recorded get plain titles", async
   expect(g.getByText("No run linked")).toBeInTheDocument();
 });
 
-test("the server's limitations are shown", async () => {
+test("the limitations panel is not shown", async () => {
   setAdapter(stub());
   render(<App />);
   await loaded();
-  expect(screen.getByText(/Actors are not verified identities/)).toBeInTheDocument();
+  expect(screen.queryByText(/Actors are not verified identities/)).toBeNull();
 });
 
 // ---- navigation and failure ------------------------------------------------

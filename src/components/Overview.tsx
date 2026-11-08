@@ -18,7 +18,7 @@ import {
   totalOf,
 } from "../overview";
 import { useAsync } from "../useAsync";
-import { ErrorState, Loading, Notice } from "./States";
+import { ErrorState, Loading } from "./States";
 
 const MAX_LISTED = 10;
 const CHART_PX = 170;
@@ -42,9 +42,6 @@ export function Overview() {
               </button>
             ))}
           </div>
-          <button className="btn" onClick={reload}>
-            Refresh
-          </button>
         </div>
       </div>
       {s.state === "loading" && <Loading what="overview" />}
@@ -184,16 +181,6 @@ function Body({ o }: { o: OverviewData }) {
         </section>
       </div>
 
-      {o.limitations.length > 0 && (
-        <Notice tone="info">
-          <strong>What this view cannot tell you</strong>
-          <ul>
-            {o.limitations.map((l, i) => (
-              <li key={i}>{l}</li>
-            ))}
-          </ul>
-        </Notice>
-      )}
     </>
   );
 }

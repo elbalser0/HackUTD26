@@ -155,15 +155,15 @@ test("an admin sees the admin shell: ADMIN sidebar with Overview and All records
   expect(screen.queryByRole("heading", { name: "Manual changes" })).toBeNull();
 });
 
-test("an employee at #/admin gets the existing token gate and the overview is never requested", async () => {
+test("an employee at #/admin is sent to the records page and the overview is never requested", async () => {
   const ov = vi.fn(async () => overview());
   setAdapter(stub(employee, ov));
   render(<App />);
-  expect(await screen.findByLabelText("Admin token")).toBeInTheDocument();
+  await waitFor(() => expect(window.location.hash).toBe("#/"));
   expect(ov).not.toHaveBeenCalled();
 });
 
-test("if /api/me fails, #/admin falls back to the server-enforced token gate, never to the overview", async () => {
+test("if /api/me fails, #/admin shows an error with retry, never the overview", async () => {
   const ov = vi.fn(async () => overview());
   setAdapter(
     stub(async () => {
@@ -171,8 +171,16 @@ test("if /api/me fails, #/admin falls back to the server-enforced token gate, ne
     }, ov),
   );
   render(<App />);
-  expect(await screen.findByLabelText("Admin token")).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   expect(ov).not.toHaveBeenCalled();
+});
+
+test("there is no Refresh button on the overview", async () => {
+  setAdapter(stub(admin));
+  render(<App />);
+  await shown();
+  expect(screen.queryByRole("button", { name: "Refresh" })).toBeNull();
 });
 
 // ---- KPIs ------------------------------------------------------------------
@@ -343,15 +351,6 @@ test("7 d refetches with that window and relabels the event count", async () => 
   expect(screen.getByRole("button", { name: "7 d" })).toHaveAttribute("aria-pressed", "true");
 });
 
-test("Refresh asks again", async () => {
-  const ov = vi.fn(async (w: OverviewWindow) => overview({ window: w }));
-  setAdapter(stub(admin, ov));
-  render(<App />);
-  await shown();
-  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  await waitFor(() => expect(ov).toHaveBeenCalledTimes(2));
-});
-
 test("a backend failure is an error with retry, never zeros", async () => {
   setAdapter(
     stub(admin, async () => {
@@ -363,11 +362,12 @@ test("a backend failure is an error with retry, never zeros", async () => {
   expect(screen.queryByText("Open records")).toBeNull();
 });
 
-test("the server's limitations are shown", async () => {
+test("the limitations panel is not shown", async () => {
   setAdapter(stub(admin));
   render(<App />);
   await shown();
-  expect(screen.getByText(/not incidents or downtime/)).toBeInTheDocument();
+  expect(screen.queryByText(/not incidents or downtime/)).toBeNull();
+  expect(screen.queryByText(/What this view cannot tell you/)).toBeNull();
 });
 
 test("the admin view is read-only: no report form or Save button", async () => {

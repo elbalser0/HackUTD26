@@ -27,7 +27,7 @@ import {
 } from "../events";
 import { humanize } from "../overview";
 import { useAsync } from "../useAsync";
-import { ErrorState, Loading, Notice } from "./States";
+import { ErrorState, Loading } from "./States";
 
 export function AllRecords({ view, hour }: { view: "records" | "events"; hour: string | null }) {
   const records = useAsync(() => api.listRecords(), []);
@@ -342,16 +342,6 @@ function EventsView({ hour }: { hour: string | null }) {
               </div>
             )}
           </section>
-          {s.data.limitations.length > 0 && (
-            <Notice tone="info">
-              <strong>What this view cannot tell you</strong>
-              <ul>
-                {s.data.limitations.map((l, i) => (
-                  <li key={i}>{l}</li>
-                ))}
-              </ul>
-            </Notice>
-          )}
         </>
       )}
     </>

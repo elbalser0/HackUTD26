@@ -65,8 +65,8 @@ is configured, including this seeded history and your real records.
 |---|---|
 | UI says "Backend unavailable" | API down or Tiger unreachable (the API returns 503). Check terminal 1 and `curl /api/health`. It is an error, never "no changes". |
 | `scan` prints `SCAN FAILED` | Terraform or the token failed. Open records are marked failed; this is **not** "no drift". Check the token file and `terraform -chdir=break-glass-infra validate`. |
-| Sign-in fails | Use the old admin screen's offline fallback only if `BG_ADMIN_TOKEN` is set on the server (the link on the sign-in page). The new admin screens need a Google admin. |
-| You land on the old "Team-wide history" screen | That account is not in `BG_ADMIN_EMAILS` (server says not an admin). Sign in with an admin account. |
+| Sign-in fails | The admin screens need a Google admin sign-in; there is no offline fallback page any more. |
+| You land on the employee records page instead of Overview | That account is not in `BG_ADMIN_EMAILS` (server says not an admin). Sign in with an admin account. |
 | Last scan is amber | There has never been a scan, or the last one failed. Run the baseline scan again. (An old but successful scan is not amber; it just shows its age.) Last apply amber means an unknown or failed outcome. |
 | "address already in use" on 8000 | An old API is running: `lsof -nP -iTCP:8000 -sTCP:LISTEN`, then `kill <pid>`. |
 | Need to restore the week | Do not re-seed over existing data (it refuses). The seeded records are in `demo-authored`. |
