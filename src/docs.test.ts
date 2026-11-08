@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import readme from "../README.md?raw";
 import project from "../docs/PROJECT.md?raw";
 import ci from "../.github/workflows/ci.yml?raw";
+import handoff from "../docs/HANDOFF.md?raw";
 
 const both = { README: readme, PROJECT: project };
 
@@ -123,4 +124,45 @@ test("CI backend job stays offline and keeps the frontend job", () => {
   expect(ci).toMatch(/npm test/);
   expect(ci).not.toMatch(/secrets\./i);
   expect(ci).not.toMatch(/DIGITALOCEAN|terraform (apply|plan)|BG_ADMIN_TOKEN/i);
+});
+
+// ---- Agent handoff contract: a fresh agent must be able to start from this file alone ----
+
+test("README links the agent handoff and nothing links the removed spike handoff", () => {
+  expect(readme).toContain("docs/HANDOFF.md");
+  for (const t of [readme, project, handoff]) expect(t).not.toContain("HANDOFF-terraform-spike");
+});
+
+test("handoff names the source of truth and the working rules", () => {
+  expect(handoff).toContain("Break-Glass Handoff — PRD.md");
+  expect(handoff).toMatch(/never (read|open)[^.\n]*\.env/i);
+  expect(handoff).toMatch(/test[- ]first|TDD/i);
+  expect(handoff).toMatch(/team approval|explicit approval/i);
+  expect(handoff).toMatch(/never[^.\n]*terraform apply/i);
+  expect(handoff).toMatch(/only when (the user )?ask/i); // commit/push/merge only on request
+});
+
+test("handoff separates what is verified on real Terraform from what is not", () => {
+  expect(handoff).toMatch(/verified on real/i);
+  expect(handoff).toMatch(/not (yet )?(run|verified|exercised)[^.\n]*(revert|override)/i);
+  expect(handoff).toMatch(/H5|keep-path/i);
+  expect(handoff).toMatch(/drift-free/i);
+});
+
+test("handoff lists next steps including the unbuilt admin dashboard UI", () => {
+  expect(handoff).toMatch(/## Next steps/i);
+  expect(handoff).toMatch(/admin dashboard UI/i);
+  expect(handoff).toMatch(/BG_ADMIN_TOKEN/);
+});
+
+test("handoff carries the practical gotchas that cost time this session", () => {
+  expect(handoff).toMatch(/stdin|end-of-input|EOF/i);   // closed stdin = cancel, safe way to show the warning
+  expect(handoff).toMatch(/first character|leading space/i); // the `!` shell-mode paste problem
+  expect(handoff).toMatch(/python3\.12/);
+  expect(handoff).toMatch(/--no-prompt/);
+});
+
+test("handoff does not contain secrets or real account values", () => {
+  expect(handoff).not.toMatch(/dop_v1_|\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b(?<!0\.0\.0\.0)(?<!127\.0\.0\.1)(?<!203\.0\.113\.10)/);
+  expect(handoff).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?<!00000000-0000-4000-8000-000000000001)/);
 });
