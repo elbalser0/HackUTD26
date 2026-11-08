@@ -64,6 +64,7 @@ GitHub Actions runs the frontend checks on pushes and pull requests.
 - [docs/BACKEND.md](docs/BACKEND.md): backend status, rules, guarded apply, runbooks
 - [docs/FRONTEND.md](docs/FRONTEND.md): UI status and verification evidence
 - [docs/PROJECT.md](docs/PROJECT.md): living decisions and next gate
+- [docs/HANDOFF.md](docs/HANDOFF.md): current state, working rules, verified versus unverified, and next steps for the next agent
 
 ## Safety and honesty
 
