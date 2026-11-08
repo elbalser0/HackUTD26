@@ -165,6 +165,15 @@ Open (by design or pending the spike):
 
 ## Runbooks
 
+### CLI handoff (primary path)
+Reasons are captured in the terminal first. The dashboard is for visibility, and the web report form is the fallback.
+1. `breakglass scan` shows what Argus detected (resource and change), then asks **"Why was this change needed?"**, **"Your name"** (optional) and keep/revert/unsure. The reason is saved as self-reported (`source=cli`).
+2. Pressing Enter at the first question skips it. The record stays open and unexplained, and a later apply warning says "no reason recorded".
+3. A later `breakglass apply` that would undo the change shows that exact reason and name in its warning.
+4. If stdin is not an interactive terminal, the scan does not ask. It prints, per unexplained record, `breakglass report <id> --reason "..." --reporter "..."` instead of skipping silently. `--no-prompt` turns both off.
+
+Verified offline (`tests/test_cli_handoff.py`, authored fixtures and a fake Terraform runner). Not yet run end to end on real Terraform with the two-question prompt.
+
 ### Preflight (before the demo)
 1. `[bool](Test-Path $HOME\.secrets\digitalocean_token)` is True. Don't print the file.
 2. `cd backend && python -m pytest -q` is all green.
@@ -185,7 +194,7 @@ Open (by design or pending the spike):
 Runs on **Daniel's machine** (the single operator: it holds the Terraform state, runs the backend and the UI).
 1. Baseline: `breakglass scan` should say 0 new (no drift).
 2. Console: add inbound tcp 8443 from `0.0.0.0/0, ::/0` to `break-glass-demo` (the "emergency fix").
-3. `breakglass scan` should give one `added` record and the one-line "name: reason" prompt. The refresh-only plan is never applied.
+3. `breakglass scan` should give one `added` record and the "Why was this change needed?" prompt. The refresh-only plan is never applied.
 4. Capture: `terraform plan -refresh-only -out=scan.tfplan` and `terraform plan -out=apply.tfplan`, each saved with `terraform show -json scan.tfplan > raw/scan.json` (`raw/` and `*.json` in that folder are gitignored). Send privately to Samuel to sanitize into `backend/tests/fixtures/real/`.
 5. `breakglass apply` shows the warning; choose keep or cancel (nothing applied). The apply run appears in the UI.
 
