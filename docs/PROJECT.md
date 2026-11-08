@@ -20,14 +20,14 @@ Build **Break-Glass Handoff** for the NMC² challenge at HackUTD 2026: capture a
 - Frontend: React + TypeScript + Vite in the repo root; npm lockfile committed. Read-only: it never runs Terraform and holds no secrets.
 - Backend: one Python FastAPI process, one SQLite file, one CLI (`backend/`). No microservices. Contract in `docs/API.md`.
 - Detector: Terraform refresh-only plan JSON; normal plan JSON supplies proposed actions. Coverage is only `digitalocean_firewall` → `inbound_rule`.
-- Provider and demo scenario: DigitalOcean droplet and firewall in `infra/demo`, pending team confirmation (PRD §10).
+- Provider and demo scenario: DigitalOcean firewall `digitalocean_firewall.demo` in `break-glass-infra/` (applied; not attached to the droplet). Scenario still pending team confirmation (PRD §10).
 - Authored (hand-written) data lives in environment `<env>-authored` and can never merge with or resolve live records.
 - Palette from https://nmc2.com/: black/white, blue `#2b9cfc`, Roboto. Our artwork is original CSS. Independent project, not an official NMC² product.
 
 ## Architecture and integration seam
 
 ```
-infra/demo (Terraform) → refresh-only plan → detector → SQLite ← FastAPI ← web UI
+break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← FastAPI ← web UI
                        → normal plan      → matcher  → guarded apply wrapper (CLI)
 ```
 
@@ -48,7 +48,7 @@ infra/demo (Terraform) → refresh-only plan → detector → SQLite ← FastAPI
 
 ## Next decision gate
 
-1. Run the **real Terraform spike** on `infra/demo`. It needs an SSH key name, an allowed IP and explicit team approval before any plan or apply. Capture sanitized real plan JSON into `backend/tests/fixtures/real/`.
+1. Finish the **real Terraform spike** on `break-glass-infra/` (partial: a real plan succeeded). Make a console edit, run a refresh-only scan, and capture sanitized plan JSON into `backend/tests/fixtures/real/`. Needs explicit team approval for any cloud operation.
 2. Verify the detector direction against the capture and flip detector and fixtures together if wrong. Also verify the empty-saved-plan state-sync hypothesis.
 3. Run the apply-run view against a real `breakglass apply`, and check the 409 and 422 cases.
 4. Decide the admin log view scope (R9) and identity and authorization mechanism.
