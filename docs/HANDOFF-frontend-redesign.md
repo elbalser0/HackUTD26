@@ -55,10 +55,10 @@ targets, wrapping of long names and hashes, `.top` height, `.tag` wrapping); `sr
 
 **Stubs and fixtures only:** every unit and component behaviour (vitest stub adapters), and the fixture adapter in Chrome.
 
+**Scratch-stack check (2026-11-08, later): real API on local TimescaleDB (`argus-tsdb-test`, scratch DB dropped afterwards), not Tiger.** A real unfinished run, a real 503 and the employee palette were checked in Chrome. Unknown shows as Unknown (Overview KPI, Run outcomes, Record page gap box), never failed. A 503 shows an error with Retry in the admin Overview and the employee page. The Google gate was bypassed: `BG_NO_DOTENV=1` API on a scratch DB, a tiny proxy adding a throwaway shared-token header, and Vite started with the four `VITE_FIREBASE_*` variables blanked on the command line (real env vars beat `.env.local`).
+
 **NOT verified live:**
-- The 503 `storage_unavailable` state in the new screens (needs the API stopped or its database unreachable).
-- A real unknown run outcome (the real data has Cancelled and Kept runs only).
-- The shared-token screen, and the employee palette on real data.
+- A real unknown run outcome on Tiger (Tiger data has Cancelled and Kept runs only), the shared-token screen, and the 503 on All records, Events and the Record page (only Overview and the employee page were looked at).
 - A real phone. Tables use `.scroll-x`; inline resource links in table rows are still about 15px tall.
 - Backend side: API analytics and overview over HTTP against Tiger under load, read-only service behaviour, a real Terraform apply (none authorized).
 
@@ -128,7 +128,7 @@ chart hours do not line up with the fixture events, so clicking a bar shows 0 ma
 Done 2026-11-08: admin palette, linked KPIs, phone pass (admin and employee, fixtures and real data), shared-token decision,
 dead-code cleanup (`RecordDetail.tsx`, `RecordList.tsx` removed; `Freshness` in `components/Freshness.tsx`), `docs/FRONTEND.md`
 and `README.md`.
-1. **Finish the live check** (user runs the API, see section 7): the 503 state, a real unknown run outcome, the employee palette on real data, and a real phone if one is available. The Google sign-in needs the user; do not sign in for them.
+1. **Remaining live checks:** a real phone, the shared-token screen, and the 503 on the other admin pages. The Google sign-in needs the user; do not sign in for them.
 2. **Table tap targets:** inline resource links inside table rows are about 15px tall; enlarging them needs a row layout decision (`AllRecords.tsx` sets `minHeight: 0` deliberately).
 3. **Apply-run page** (`#/apply/<id>`) still uses the old layout and `App.css`; `Admin.tsx` and the legacy admin styles remain for non-admins. Redesign only if the user asks.
 4. **Optional:** server-side `q` on `GET /api/admin/log` if client-side search over 100 events proves too narrow (backend change, tests on SQLite and Postgres, `docs/API.md`). Bounded admin reads, a TimescaleDB CI job, a Tiger runbook and a non-DDL runtime DB role are also still open on the backend side.

@@ -27,8 +27,10 @@ export function ErrorState({
             ? "Not found."
             : "Could not load."}
       </strong>{" "}
-      {(e?.message ?? "Unexpected error").replace(/\.?$/, ".")} Nothing here
-      should be read as “no changes” — the data could not be fetched.
+      {unreachable && /^backend unavailable\.?$/i.test(e?.message ?? "")
+        ? ""
+        : `${(e?.message ?? "Unexpected error").replace(/\.?$/, ".")} `}
+      Nothing here should be read as “no changes” — the data could not be fetched.
       {onRetry && (
         <button className="btn" onClick={onRetry}>
           Retry
