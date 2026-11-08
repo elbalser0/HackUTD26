@@ -104,6 +104,7 @@ def rule_from_json(raw: str | None) -> FirewallRule | None:
         return None
     d = json.loads(raw)
     return FirewallRule(
+        action=d.get("action") or "allow",  # rows written before action existed
         protocol=d.get("protocol"),
         port_range=d.get("port_range"),
         source_addresses=tuple(d.get("source_addresses", [])),
@@ -229,6 +230,12 @@ class Database:
         self._x(
             "INSERT INTO scans (id, environment, started_at, status, detail) VALUES (?, ?, ?, ?, ?)",
             (scan_id, environment, started_at, status, detail),
+        )
+
+    def last_scan(self, environment: str) -> sqlite3.Row | None:
+        return self._one(
+            "SELECT started_at, status FROM scans WHERE environment = ? ORDER BY started_at DESC, id DESC LIMIT 1",
+            (environment,),
         )
 
     def reset(self) -> None:

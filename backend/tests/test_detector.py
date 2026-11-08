@@ -27,8 +27,8 @@ def test_authored_fixture_direction_baseline_8080_observed_8443():
     assert o.resource_type == "digitalocean_firewall"
     assert o.attribute == "inbound_rule"
     assert o.kind == ChangeKind.MODIFIED
-    assert o.baseline == FirewallRule("tcp", "8080", ANY)
-    assert o.observed == FirewallRule("tcp", "8443", ANY)
+    assert o.baseline == FirewallRule("tcp", "8080", ANY, action="allow")
+    assert o.observed == FirewallRule("tcp", "8443", ANY, action="allow")
 
 
 def test_reordered_rules_produce_identical_observations():

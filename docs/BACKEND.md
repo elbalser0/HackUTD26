@@ -1,6 +1,6 @@
 # Backend: Break-Glass Handoff
 
-Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.md](API.md). Demo infrastructure: [../infra/demo/README.md](../infra/demo/README.md).
+Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.md](API.md). Demo infrastructure: [`break-glass-infra/main.tf`](../break-glass-infra/main.tf) (Daniel's).
 
 ## Status (2026-11-07)
 
@@ -13,8 +13,8 @@ Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.m
 | CLI (`breakglass …`) | Done, tested offline |
 | Guarded apply wrapper | Done, tested with a mocked Terraform runner |
 | Verified resolution (`recheck`) | Done, tested on authored fixtures |
-| Demo Terraform (`infra/demo`) | Written; `terraform validate` passes; **not provisioned** |
-| **Real Terraform spike** | **PENDING.** Token present; waiting for SSH key name, allowed IP, and team approval to plan/apply |
+| Demo Terraform (`break-glass-infra/`) | Firewall `digitalocean_firewall.demo` ("break-glass-demo") **applied** from Daniel's machine; not attached to the droplet (`attach_firewall = false`) |
+| **Real Terraform spike** | **PARTIAL.** Real `plan` succeeded (token scopes OK). Detection of a console edit not yet exercised; runs on Daniel's machine (the operator) |
 
 ### Evidence: real vs. authored
 - Every fixture in `backend/tests/fixtures/authored/` was **hand-written**. Its shape follows Terraform's documented plan JSON format but has not been checked against real output.
@@ -26,12 +26,12 @@ Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.m
 One FastAPI process, one SQLite file, one CLI. No microservices.
 
 ```
-infra/demo (Terraform) ── terraform plan -refresh-only ──► detector ──► service.ingest_refresh_plan ──► SQLite
+break-glass-infra (Terraform) ── terraform plan -refresh-only ──► detector ──► service.ingest_refresh_plan ──► SQLite
                         └─ terraform plan (saved)  ──► matcher ──► wrapper (warn + confirm) ──► terraform apply <saved plan>
 SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Daniel's UI
 ```
 
-- `config.py`: env settings. `BG_TF_DIR` must resolve inside the repo's `infra/`.
+- `config.py`: env settings. `BG_TF_DIR` must resolve inside the repo's `break-glass-infra/`.
 - `tfrunner.py`: the only place that spawns Terraform. Argument arrays, `shell=False`, fixed plan file names, plans deleted after use.
 - `detector.py` / `matcher.py` / `rules.py` / `suggest.py`: pure functions over plan JSON. Firewall rules are compared as **sets**, never by index.
 - `service.py`: records, dedup, supersede, warnings, re-check.
@@ -40,6 +40,7 @@ SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Da
 
 ## Supported coverage
 
+- Rule identity includes `action` (allow/deny), as seen in real provider v2.107 output. A missing action counts as "allow", so older state and newer live output don't create false records. Run `breakglass reset-db --yes` on any database created before this change.
 - **Only** `digitalocean_firewall` → `inbound_rule`. Detects added, removed and modified rules, where modified means the same protocol and sources with a different port.
 - Drift in other firewall attributes, other resource types, deleted resources, or unknown/sensitive values is reported as **unsupported**. It never becomes a record and is never treated as "no drift".
 - Changes inside the OS (anything Terraform doesn't track) are invisible.
@@ -99,12 +100,19 @@ breakglass recheck [--refresh-json FILE --plan-json FILE --label authored-fixtur
 breakglass reset-db --yes
 ```
 
-Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `infra/demo`), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`).
+Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`).
+
+## Infrastructure and operator
+
+- `break-glass-infra/main.tf` manages **one firewall only**: `digitalocean_firewall.demo`, named "break-glass-demo". Its rules are SSH from the admin /32 and outbound open. It is attached to the existing droplet only when `attach_firewall = true`. Terraform does not manage the droplet.
+- **Demo story:** the emergency fix is **adding** an inbound rule in the console, such as tcp 8443. The detector records it as `added`, and a normal plan would remove it, which is what triggers the warning.
+- **Single operator:** Terraform state is a local file on Daniel's machine, so Terraform, `breakglass` and the API all run there. Never `apply` this config from a second machine; that is what produced the 409 duplicate-name error.
+- **Token on the operator machine:** `read -rsp "DigitalOcean API token: " DIGITALOCEAN_TOKEN; export DIGITALOCEAN_TOKEN`. The backend uses the exported variable and falls back to `~/.secrets/digitalocean_token` only if it is unset.
 
 ## Credentials
 
 - The DigitalOcean token lives in `~/.secrets/digitalocean_token` (owner-only ACL), outside the repo. `tfrunner` reads it into the Terraform **child process environment only**, and only if `DIGITALOCEAN_TOKEN` isn't already set. It is never printed, logged or stored.
-- Never commit: `*.tfstate*`, `*.tfplan`, `*.tfvars`, `.terraform/`, `infra/demo/raw/`, `backend/*.db`, `.env`. All of these are gitignored. State and plans can contain sensitive values.
+- Never commit: `*.tfstate*`, `*.tfplan`, `*.tfvars`, `.terraform/`, `break-glass-infra/raw/`, `backend/*.db`, `.env`. All of these are gitignored. State and plans can contain sensitive values.
 
 ## Security hardening (from the independent review, 2026-11-07)
 
@@ -140,22 +148,31 @@ Open (by design or pending the spike):
 ### Preflight (before the demo)
 1. `[bool](Test-Path $HOME\.secrets\digitalocean_token)` is True. Don't print the file.
 2. `cd backend && python -m pytest -q` is all green.
-3. `terraform -chdir=infra/demo validate`.
+3. `terraform -chdir=break-glass-infra validate`.
 4. `breakglass list --all` shows the expected state. Reset if needed (below).
 5. The API is up: `curl http://localhost:8000/api/health`.
 
 ### Reset between rehearsals
-1. In the DigitalOcean console, set the firewall app rule back to 8080, or let a confirmed `breakglass apply` → revert do it.
+1. In the DigitalOcean console, remove the added 8443 rule from `break-glass-demo`, or let a confirmed `breakglass apply` → revert remove it.
 2. `breakglass recheck` resolves or keeps records honestly, or `breakglass reset-db --yes` wipes demo data.
 
 ### Real spike / provisioning — EACH STEP NEEDS TEAM APPROVAL
-See `infra/demo/README.md`. In short: `init` → `plan` → `apply` → console edit 8080→8443 → `breakglass scan` (the refresh-only plan is never applied) → `breakglass apply` (shows the warning) → capture sanitized fixtures into `backend/tests/fixtures/real/`.
+Runs on **Daniel's machine** (the single operator: it holds the Terraform state, runs the backend and the UI).
+1. Baseline: `breakglass scan` should say 0 new (no drift).
+2. Console: add inbound tcp 8443 from `0.0.0.0/0, ::/0` to `break-glass-demo` (the "emergency fix").
+3. `breakglass scan` should give one `added` record and the one-line "name: reason" prompt. The refresh-only plan is never applied.
+4. Capture: `terraform plan -refresh-only -out=scan.tfplan` and `terraform plan -out=apply.tfplan`, each saved with `terraform show -json scan.tfplan > raw/scan.json` (`raw/` and `*.json` in that folder are gitignored). Send privately to Samuel to sanitize into `backend/tests/fixtures/real/`.
+5. `breakglass apply` shows the warning; choose keep or cancel (nothing applied). The apply run appears in the UI.
 
 ### Teardown (approved only)
-`terraform -chdir=infra/demo destroy` with the token loaded per command, then confirm in the console that the droplet and firewall are gone. Revoke the token after the hackathon.
+On Daniel's machine: set `attach_firewall = false` (if it was attached), apply, then `terraform -chdir=break-glass-infra destroy`. Both steps need approval. Confirm in the console that the firewall is gone. Delete the unused droplet if it's no longer needed, and revoke the token after the hackathon.
 
 ## Verification log
 
 - 2026-11-07: offline suite, see the latest run in the PR or handoff. CLI smoke test against authored fixtures: seed → dedup scan → report → decide → recheck stays open while the plan reverses → malformed scan fails loudly and marks the record `failed`.
 - 2026-11-07: 164 tests pass after security hardening.
-- Real Terraform workflow: **not yet exercised.**
+- 2026-11-07, first real cloud results (Samuel's machine):
+  - `terraform plan` on `break-glass-infra` succeeded. The token scopes are sufficient.
+  - Real output showed `action = "allow"` on every rule, which is now part of rule identity.
+  - `apply` was refused with `409 duplicate name`: Daniel had already applied the same firewall from his machine. That confirmed the one-state-owner rule, so Daniel's machine is the operator. Nothing was created from Samuel's machine.
+- Refresh-only detection of a console edit: **not yet exercised.**

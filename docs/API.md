@@ -47,6 +47,7 @@ Meaning of `last_check_status`: `current` = seen in the most recent successful s
 ### Rule
 ```json
 {
+  "action": "allow",
   "protocol": "tcp",
   "port_range": "8443",
   "source_addresses": ["0.0.0.0/0", "::/0"],
@@ -56,19 +57,20 @@ Meaning of `last_check_status`: `current` = seen in the most recent successful s
   "source_kubernetes_ids": []
 }
 ```
-`protocol` and `port_range` may be `null` if unknown. Arrays are sorted and never `null`.
+`action` (`"allow"` / `"deny"`; added after real provider output showed it; a missing value is reported as `"allow"`), `protocol` and `port_range` may be `null` if unknown. Arrays are sorted and never `null`. A deny rule's summary reads "inbound DENY tcp …".
 
 ### Record
+The example below is a `modified` rule. **In the live demo the console edit *adds* a rule** (`change_kind: "added"`, `baseline_value: null`, summary `"added live: inbound tcp port 8443 from 0.0.0.0/0, ::/0"`, resource `digitalocean_firewall.demo`).
 ```json
 {
   "id": "rec_7f3a9c2e1b",
   "environment": "demo",
-  "resource_address": "digitalocean_firewall.web",
+  "resource_address": "digitalocean_firewall.demo",
   "resource_type": "digitalocean_firewall",
   "attribute": "inbound_rule",
   "change_kind": "modified",
-  "baseline_value": { "protocol": "tcp", "port_range": "8080", "source_addresses": ["0.0.0.0/0", "::/0"], "source_tags": [], "source_droplet_ids": [], "source_load_balancer_uids": [], "source_kubernetes_ids": [] },
-  "observed_value": { "protocol": "tcp", "port_range": "8443", "source_addresses": ["0.0.0.0/0", "::/0"], "source_tags": [], "source_droplet_ids": [], "source_load_balancer_uids": [], "source_kubernetes_ids": [] },
+  "baseline_value": { "action": "allow", "protocol": "tcp", "port_range": "8080", "source_addresses": ["0.0.0.0/0", "::/0"], "source_tags": [], "source_droplet_ids": [], "source_load_balancer_uids": [], "source_kubernetes_ids": [] },
+  "observed_value": { "action": "allow", "protocol": "tcp", "port_range": "8443", "source_addresses": ["0.0.0.0/0", "::/0"], "source_tags": [], "source_droplet_ids": [], "source_load_balancer_uids": [], "source_kubernetes_ids": [] },
   "summary": "inbound tcp port 8080 from 0.0.0.0/0, ::/0 changed live to port 8443",
   "first_detected_at": "2026-11-08T03:30:12.000000Z",
   "last_detected_at": "2026-11-08T03:45:02.000000Z",
@@ -100,12 +102,12 @@ A record with `reason: null` is an **unexplained manual change**. Still show it 
   "generated_at": "2026-11-08T09:12:00.000000Z",
   "plan_fingerprint": "sha256:5be1…",
   "proposed_changes": [
-    { "resource_address": "digitalocean_firewall.web", "resource_type": "digitalocean_firewall", "actions": ["update"], "summary": "update inbound_rule: -tcp 8443, +tcp 8080" }
+    { "resource_address": "digitalocean_firewall.demo", "resource_type": "digitalocean_firewall", "actions": ["update"], "summary": "update inbound_rule: -tcp 8443, +tcp 8080" }
   ],
   "warnings": [
     {
       "record_id": "rec_7f3a9c2e1b",
-      "resource_address": "digitalocean_firewall.web",
+      "resource_address": "digitalocean_firewall.demo",
       "message": "This apply will remove the live rule 'inbound tcp port 8443 from 0.0.0.0/0, ::/0' and restore port 8080. Paul reported (self-reported; detected 2026-11-08 03:30 UTC): \"payment webhook blocked, opened 8443\".",
       "reason": "payment webhook blocked, opened 8443",
       "reporter": "Paul",
@@ -128,8 +130,10 @@ Nullable: `plan_fingerprint` (null if planning failed), `ack_note`, `completed_a
 ### `GET /api/health`
 `200`:
 ```json
-{ "status": "ok", "version": "0.1.0", "db": "ok", "environment": "demo", "terraform_dir_configured": true, "time": "2026-11-08T03:30:00.000000Z" }
+{ "status": "ok", "version": "0.1.0", "db": "ok", "environment": "demo", "terraform_dir_configured": true, "time": "2026-11-08T03:30:00.000000Z",
+  "last_scan_at": "2026-11-08T03:29:41.512000Z", "last_scan_status": "ok" }
 ```
+`last_scan_at` / `last_scan_status` (`"ok"` | `"failed"`) describe the most recent scan of this environment. Both are `null` if it was never scanned, so the UI can show scan age even with an empty record list.
 If the DB cannot be opened: `503` with the **same body shape** (not the error envelope), `status: "degraded"`, `db: "error"`.
 
 ### `GET /api/records?resolution=open`

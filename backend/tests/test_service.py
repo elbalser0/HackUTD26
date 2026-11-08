@@ -193,3 +193,10 @@ def test_list_records_newest_first_with_subsecond_timestamps(db):
     out = scan(db, refresh_other_address(), now=later)
     newest = out.new_ids[0]
     assert all_rows(db)[0]["id"] == newest
+
+
+def test_legacy_row_without_action_still_matches_new_observation(db):
+    # Review H1 scenario B: a stored rule JSON without "action" must load as "allow".
+    from breakglass.db import rule_from_json
+    r = rule_from_json('{"protocol": "tcp", "port_range": "8443", "source_addresses": ["0.0.0.0/0"]}')
+    assert r.action == "allow"

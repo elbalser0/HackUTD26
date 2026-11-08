@@ -68,7 +68,8 @@ def test_health_shape(client):
     r = client.get("/api/health")
     assert r.status_code == 200
     b = r.json()
-    assert set(b) == {"status", "version", "db", "environment", "terraform_dir_configured", "time"}
+    assert set(b) == {"status", "version", "db", "environment", "terraform_dir_configured", "time",
+                      "last_scan_at", "last_scan_status"}
     assert b["status"] == "ok" and b["db"] == "ok"
     assert isinstance(b["terraform_dir_configured"], bool)
     assert TZ_RE.search(b["time"])
@@ -232,3 +233,12 @@ def test_report_rejects_terminal_control_characters(client, db):
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
     r = client.post(f"/api/records/{rid}/report", json={"reason": "fine", "reporter": "P‮aul"})
     assert r.status_code == 422
+
+
+def test_health_reports_last_scan(client, db, monkeypatch):
+    body = client.get("/api/health").json()
+    assert body["last_scan_at"] is None and body["last_scan_status"] is None
+    assert body["environment"] == ENV
+    seed(db)  # scan into ENV
+    body = client.get("/api/health").json()
+    assert body["last_scan_status"] == "ok" and body["last_scan_at"].endswith("Z")

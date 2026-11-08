@@ -151,3 +151,19 @@ def test_offline_recheck_only_touches_fixture_environment(db_path):
         assert db.get_record(live.new_ids[0])["resolution"] == "open"
     finally:
         db.close()
+
+
+def test_repo_root_break_glass_infra_is_allowed(db_path, monkeypatch):
+    from breakglass import config
+    root = config.REPO_ROOT / "break-glass-infra"
+    if not root.is_dir():
+        pytest.skip("break-glass-infra/ not present in this checkout")
+    monkeypatch.setenv("BG_TF_DIR", str(root))
+    monkeypatch.delenv("BG_ALLOW_TF_DIR_OUTSIDE_REPO", raising=False)
+    assert config.load_settings().tf_dir == root.resolve()
+
+
+def test_default_tf_dir_is_break_glass_infra(monkeypatch):
+    from breakglass import config
+    monkeypatch.delenv("BG_TF_DIR", raising=False)
+    assert config.DEFAULT_TF_DIR.name == "break-glass-infra"

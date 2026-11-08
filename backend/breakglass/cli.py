@@ -1,7 +1,7 @@
 """`breakglass` command-line interface.
 
 Terraform-running commands (scan, apply, recheck) use only the server-configured
-Terraform directory (BG_TF_DIR, default infra/demo). `--from-json` options read
+Terraform directory (BG_TF_DIR, default break-glass-infra/). `--from-json` options read
 local plan JSON files for offline/fixture use and are labeled accordingly.
 """
 
@@ -41,7 +41,7 @@ def _load_json(path: str) -> Any:
 
 def _terraform(settings) -> Terraform:
     if settings.tf_dir is None:
-        raise SystemExit("Terraform directory not found. Set BG_TF_DIR (must be inside the repo's infra/).")
+        raise SystemExit("Terraform directory not found. Set BG_TF_DIR (must be inside the repo's break-glass-infra/).")
     return Terraform(settings.tf_dir, binary=settings.terraform_bin)
 
 

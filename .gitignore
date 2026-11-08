@@ -45,4 +45,6 @@ backend/*.db-*
 *.tfvars
 !*.tfvars.example
 crash.log
-infra/demo/raw/
+break-glass-infra/raw/
+break-glass-infra/*.json
+infra/*/raw/
