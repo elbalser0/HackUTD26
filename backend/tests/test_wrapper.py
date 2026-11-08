@@ -71,7 +71,7 @@ def test_revert_wrong_confirmation_saves_intent_no_apply(db, tmp_path):
 
 def test_revert_confirmed_applies_once_with_exact_args(db, tmp_path):
     rid = open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("r", "revert"))
+    res, runner, _ = run(db, tmp_path, Script("r", "revert", "webhook fixed upstream"))
     assert res.outcome == "reverted_applied" and res.applied
     assert runner.apply_calls == [EXPECTED_APPLY_ARGS]
     apply_call = [c for c in runner.calls if c[0][1] == "apply"][0]
@@ -81,7 +81,7 @@ def test_revert_confirmed_applies_once_with_exact_args(db, tmp_path):
 
 def test_override_confirmed_applies_once(db, tmp_path):
     open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "override"))
+    res, runner, _ = run(db, tmp_path, Script("o", "override", "approved by lead"))
     assert res.outcome == "override_applied"
     assert runner.apply_calls == [EXPECTED_APPLY_ARGS]
 
@@ -103,7 +103,7 @@ def test_missing_reason_still_warns(db, tmp_path):
 
 def test_apply_failure_exit_code(db, tmp_path):
     open_record(db)
-    res, runner, _ = run(db, tmp_path, Script("o", "override"), apply_exit=1)
+    res, runner, _ = run(db, tmp_path, Script("o", "override", "approved by lead"), apply_exit=1)
     assert res.outcome == "failed" and not res.applied
     assert len(runner.apply_calls) == 1
 
@@ -178,7 +178,7 @@ def test_refresh_scan_fails_verification_unavailable_cancel(db, tmp_path):
 
 def test_refresh_scan_fails_bypass_applies(db, tmp_path):
     open_record(db)
-    s = Script("unverified-bypass")
+    s = Script("unverified-bypass", "scan API down, change reviewed by hand")
     res, runner, _ = run(db, tmp_path, s, scan_exit=1)
     assert "VERIFICATION UNAVAILABLE" in s.output
     assert res.outcome == "unverified_bypass_applied" and res.check_status == "failed"
@@ -246,7 +246,7 @@ def test_non_tf_file_change_does_not_abort(db, tmp_path):
 
 # ---- cleanup and persistence ----------------------------------------------
 
-@pytest.mark.parametrize("answers", [("r", "revert"), ("c",), ()])
+@pytest.mark.parametrize("answers", [("r", "revert", "why"), ("c",), ()])
 def test_plan_files_deleted_after_run(db, tmp_path, answers):
     open_record(db)
     res, runner, _ = run(db, tmp_path, Script(*answers))
@@ -283,7 +283,7 @@ def test_unsupported_drift_is_reported_not_checked(db, tmp_path):
 
 def test_interrupt_during_apply_is_failed_not_cancelled(db, tmp_path):
     open_record(db)
-    s = Script("r", "revert")
+    s = Script("r", "revert", "why")
     runner = FakeRunner()
     tf = make_tf(tmp_path, runner)
 

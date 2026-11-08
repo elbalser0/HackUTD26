@@ -245,7 +245,25 @@ def _require_open(db: Database, record_id: str):
     return row
 
 
-def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = None) -> RecordOut:
+def _event(db: Database, conn, *, environment: str, kind: str, record_id: str | None, run_id: str | None,
+           actor: str | None, assurance: str, data: dict, now_s: str) -> str:
+    eid = new_id("evt")
+    db.insert_event({"id": eid, "environment": environment, "record_id": record_id, "run_id": run_id,
+                     "kind": kind, "actor": actor, "actor_assurance": assurance,
+                     "data_json": json.dumps(data, sort_keys=True), "created_at": now_s}, conn)
+    return eid
+
+
+def event_out(row) -> "EventOut":
+    from .models import EventOut
+    return EventOut(id=row["id"], environment=row["environment"], record_id=row["record_id"],
+                    run_id=row["run_id"], kind=row["kind"], actor=row["actor"],
+                    actor_assurance=row["actor_assurance"], data=json.loads(row["data_json"]),
+                    created_at=row["created_at"])
+
+
+def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = None,
+           source: str = "web") -> RecordOut:
     now_s = ts(now or utcnow())
     with db.tx() as conn:
         _require_open(db, record_id)
@@ -259,19 +277,31 @@ def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = 
         if body.intent is not None:
             fields.update(intent=body.intent.value, intent_updated_at=now_s)
         db.update_record(record_id, fields, conn)
+        row = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()
+        # Append-only history: a later report never erases an earlier one (PRD R6/R10).
+        _event(db, conn, environment=row["environment"], kind="report", record_id=record_id, run_id=None,
+               actor=fields["reporter"], assurance="self-reported", now_s=now_s,
+               data={"reason": fields["reason"], "intent": body.intent.value if body.intent else None,
+                     "source": source})
     return record_out(db.get_record(record_id))
 
 
-def decide(db: Database, record_id: str, body: DecisionIn, now: datetime | None = None) -> RecordOut:
+def decide(db: Database, record_id: str, body: DecisionIn, now: datetime | None = None,
+           source: str = "web", actor: str | None = None) -> RecordOut:
     """Store intent. Never resolves, never applies."""
     now_s = ts(now or utcnow())
     with db.tx() as conn:
         _require_open(db, record_id)
+        note = body.note.strip() if body.note and body.note.strip() else None
         db.update_record(record_id, {
             "intent": body.intent.value,
-            "intent_note": body.note.strip() if body.note and body.note.strip() else None,
+            "intent_note": note,
             "intent_updated_at": now_s,
         }, conn)
+        env = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()["environment"]
+        _event(db, conn, environment=env, kind="decision", record_id=record_id, run_id=None,
+               actor=actor, assurance="self-reported", now_s=now_s,
+               data={"intent": body.intent.value, "note": note, "source": source})
     return record_out(db.get_record(record_id))
 
 

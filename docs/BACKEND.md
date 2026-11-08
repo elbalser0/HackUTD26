@@ -55,6 +55,7 @@ SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Da
 - **Resolution (`recheck`):** a record resolves (`verified_aligned`) only when a fresh refresh-only plan shows no drift for it **and** a fresh normal plan includes the resource and does not reverse it. Any failure or unknown keeps it open. Keep/revert intents never resolve.
 - **Fixture isolation:** authored data goes to environment `<env>-authored` and sanitized replays to `<env>-replay`. They can never merge with, explain, or resolve a live record. `--label` is required for any `--from-json` / `--refresh-json` input.
 - **Keep path / state sync:** after "keep" and an IaC edit, the normal plan has no resource changes, but state still holds the old value. `breakglass apply` detects this (drift present, no changes) and offers, with `yes`, to apply the empty saved plan so state records the live value. Then `recheck` can resolve. *Hypothesis to verify in the spike: that applying an empty saved plan persists refreshed state.*
+- **History (PRD R6/R10):** the `events` table is append-only. Reports, web/CLI decisions, wrapper reviews and run start/finish are never updated or deleted, except by `reset-db --yes` for demo data. Records keep the latest reason and intent for display only. This is application-level append-only, not a tamper-proof audit log.
 - **Self-reported context:** reporter and reason are self-reported, never audited attribution. `first_detected_at` is detection time, not change time.
 
 ## Guarded apply (`breakglass apply`)
@@ -64,14 +65,25 @@ SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Da
 3. Run `terraform plan -detailed-exitcode -out=.breakglass-apply.tfplan` (0 = no changes, stop; 2 = changes; else error, stop).
 4. Run `terraform show -json`, then match against open records.
 5. Branch on the result:
-   - **Verification failed** (scan, plan JSON or match error): prints `VERIFICATION UNAVAILABLE. This is NOT a 'no conflicts' result.` Continuing requires typing `unverified-bypass`, and that is recorded.
-   - **Warnings:** keep (saves intent, prints a literal-edit suggestion, no apply) / defer (no apply) / cancel (no apply) / revert (requires typing `revert`) / override (requires typing `override`; recorded).
+   - **Verification failed** (scan, plan JSON or match error): prints `VERIFICATION UNAVAILABLE. This is NOT a 'no conflicts' result.` Continuing requires typing `unverified-bypass` **and a rationale**.
+   - **Warnings:** each shows its reason, record age, and up to 3 prior decisions. Then:
+     - keep: saves intent and prints a literal-edit suggestion; no apply.
+     - defer: no apply.
+     - cancel: no apply.
+     - revert: requires typing `revert`, then a rationale. If either is missing, nothing is applied, but the record's intent is saved as `revert` ("revert-not-confirmed").
+     - override: requires typing `override`, then a rationale.
    - **No warnings:** requires typing `yes`.
+   - Every decision on affected records, including keep, defer and cancel, is appended as a `review` event per record. Earlier history is never overwritten (PRD R6/R10). Runs with no affected records are recorded on the run row and its `run_started` / `run_finished` events.
+   - **Known gap:** PRD §6 step 7 asks for a short rationale with every decision. Today it is required only for revert, override and bypass; keep, defer and cancel don't ask for one.
 6. Before applying, re-hash the plan file, config and workspace. On any change it aborts (`aborted_plan_changed`).
-7. `terraform apply <that exact saved plan>`. A saved-plan apply doesn't prompt, so the wrapper owns confirmation.
-8. Drift outside coverage is printed as `NOT CHECKED: …` and qualifies the "no reversal" message.
-9. Ctrl+C during the apply step is **never** reported as "nothing applied". Terraform is allowed to stop gracefully (never killed), and the run is recorded `failed` with "live state unknown; run scan/recheck". The apply has no timeout.
-10. Plan files are deleted in all cases. Each run is stored as an ApplyRun (`GET /api/apply-runs/{id}`).
+7. **Persist before execution (PRD R7):** in one transaction, save the review events (decision, rationale, reviewer and its assurance, plan fingerprint), set the run to `running` with `started_at`, and add a `run_started` event. If that write fails, nothing is applied and the run is `failed` ("decision could not be persisted").
+8. `terraform apply <that exact saved plan>`. A saved-plan apply doesn't prompt, so the wrapper owns confirmation. A `run_finished` event records the outcome.
+9. Drift outside coverage is printed as `NOT CHECKED: …` and qualifies the "no reversal" message.
+10. Ctrl+C during the apply step is **never** reported as "nothing applied". Terraform is allowed to stop gracefully (never killed), and the run is recorded `failed` with "live state unknown; run scan/recheck". The apply has no timeout.
+11. **Unknown outcomes (PRD R8):** a run left `pending`/`running` with no completion (crash, killed terminal) is marked `unknown` when the next `breakglass apply` starts. It is never shown as success.
+12. **Single operator assumption:** starting `breakglass apply` marks any other unfinished run in the same environment `unknown`. Two overlapping sessions in one environment would mislabel each other, so run the wrapper from one terminal on the operator machine.
+13. Reviewer identity: `--reviewer NAME` is recorded as `self-reported`. Otherwise the OS user name is recorded as `local-os-user (not verified)`.
+14. Plan files are deleted in all cases. Each run is stored as an ApplyRun (`GET /api/apply-runs/{id}`).
 
 **Limitations, stated honestly:**
 - Running `terraform apply` directly bypasses all of this. A CI gate would be the enforceable version; that's a stretch goal and not built.
