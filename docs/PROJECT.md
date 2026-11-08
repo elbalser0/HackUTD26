@@ -38,23 +38,23 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 
 | PRD item | Status |
 |---|---|
-| R1 detect via refresh-only JSON | Written, tested on authored fixtures only. Direction of `before`/`after` unverified. |
+| R1 detect via refresh-only JSON | Verified on real Terraform output (2026-11-07): a console-added rule is `added`, baseline empty, observed `allow tcp 8443`, so `before` is the prior state and `after` the live value. Replayed from sanitized captures in `backend/tests/fixtures/real/`. Finding: the provider reports `droplet_ids`/`tags` as null in state and `[]` live; null and empty collections now compare equal so this is not reported as drift. Only `digitalocean_firewall` `inbound_rule` is interpreted. |
 | R2, R3 persist and show records, web explanation | Done in backend and UI. Verified once in Chrome against a seeded local backend. |
-| R4, R5 match and pause | Written in the CLI wrapper, tested with a mocked Terraform runner. Never run against real Terraform. |
+| R4, R5 match and pause | Verified on real Terraform: the real normal plan's reversal is matched and the wrapper pauses before any apply, with and without a recorded reason. Cancel and keep applied nothing (the rule stayed live). Not yet run for real: a confirmed revert or override apply (reviewed-plan execution, changed-plan abort). |
 | R6 decision history without overwriting | Append-only `events` table (reports, decisions, wrapper reviews, run start/finish). Tested offline; actors are self-reported or the local OS user, not verified. |
 | R7 decision persisted before execution | The review, reviewer, rationale and exact plan fingerprint are saved in one transaction with the run marked `running` before Terraform runs; a failed write means nothing is applied. Tested with a mocked Terraform runner only. |
 | R8 outcomes, unknown when missing | Runs with no recorded completion become `unknown` (never success). Tested offline; not exercised against a real interrupted apply. |
 | R9 admin dashboard | Backend done: `/api/admin/log` and `/api/admin/records/{id}/timeline` read the events, with server-side bearer-token auth (one shared token via `BG_ADMIN_TOKEN`; fails closed; no per-admin identity). Tested on authored data. Dashboard UI not built. The older `/api/records` and `/api/apply-runs` endpoints remain unauthenticated (open decision). |
 | R10 history preserved | Append-style history in SQLite. Not audit-grade. |
-| R11 verified closure | `recheck` written, tested on authored fixtures. |
+| R11 verified closure | Verified on real Terraform (2026-11-07): after the console rule was deleted, `breakglass recheck` resolved the real record as `verified_aligned` and its history stayed intact (change, runs, explanation, review, resolution). The first real recheck had stayed open because the provider reports `droplet_ids`/`tags` as null in state and `[]` live; fixed (null and empty collections compare equal) and covered by a replay test. |
 | R12 suggested manual edit | Done for a single literal value. Never auto-patches. |
 | Agent analytics (PRD §7) | Proposed post-core. Not started. |
 
 ## Next decision gate
 
-1. Finish the **real Terraform spike** on `break-glass-infra/` from Daniel's machine (partial: a real plan succeeded). Run a baseline `breakglass scan`, make the console edit, run `scan` again, then `breakglass apply`, and capture sanitized plan JSON into `backend/tests/fixtures/real/`. Needs explicit team approval for any cloud operation.
-2. Verify the detector direction against the capture and flip detector and fixtures together if wrong. Also verify the empty-saved-plan state-sync hypothesis.
-3. Run the apply-run view against a real `breakglass apply`, and check the 409 and 422 cases.
+1. Remaining spike work on `break-glass-infra/` (Daniel's machine; each cloud step needs team approval), optional: a confirmed revert/override apply (reviewed plan executed, changed plan aborted) and the keep-path state sync. Real findings so far are recorded above and in `backend/tests/fixtures/real/README.md`.
+2. Not yet seen: a drift-free refresh-only plan (the provider noise kept `resource_drift` present). Re-check that a missing `resource_drift` key is still treated safely once one is captured.
+3. Check the 409 and 422 UI cases against the real backend.
 4. Build the admin dashboard UI over the admin log API, and decide per-admin identity (the token is shared) and whether the older read endpoints should also require authorization.
 5. Decide whether analytics fits the hackathon release or follows the core demo.
 

@@ -53,13 +53,35 @@ test("README is honest about what is NOT verified", () => {
   expect(readme).toMatch(/real Terraform/i);
 });
 
-test("README and PROJECT point at break-glass-infra and describe the partial spike", () => {
+test("README and PROJECT point at break-glass-infra and record the real spike results", () => {
   for (const t of [readme, project]) {
     expect(t).toContain("break-glass-infra");
-    expect(t).toMatch(/partial/i);
+    expect(t).toMatch(/spike/i);
+    expect(t).toContain("fixtures/real");
   }
   expect(readme).toMatch(/applied/i);
   expect(readme).toMatch(/not attached/i);
+});
+
+test("docs state what the real spike did NOT cover", () => {
+  for (const t of [readme, project]) {
+    expect(t).toMatch(/not (yet )?(run|exercised|verified)[^.]*(revert|override)/i);
+  }
+});
+
+test("docs record the real closure (recheck resolved a real record) and no longer list it as a gap", () => {
+  for (const t of [readme, project]) {
+    expect(t).toMatch(/recheck[^.]*(resolved|verified_aligned)|(resolved|closed)[^.]*real[^.]*recheck/i);
+  }
+  expect(project).not.toMatch(/has not been re-run/i);
+  expect(readme).not.toMatch(/closing a record with a real `recheck` after the fix/i);
+});
+
+test("PROJECT.md no longer calls detection, the pause and closure unverified on real Terraform", () => {
+  expect(project).not.toContain("Direction of `before`/`after` unverified");
+  expect(project).not.toContain("Never run against real Terraform");
+  expect(project).not.toMatch(/R11[^\n]*authored fixtures\./);
+  expect(project).toMatch(/null[^.]*empty/i); // the provider-noise finding is recorded
 });
 
 test("README says the admin log API exists but the dashboard UI is not built (PRD R9)", () => {
