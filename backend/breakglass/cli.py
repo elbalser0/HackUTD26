@@ -242,7 +242,7 @@ def cmd_seed_demo(args, db: Database, settings) -> int:
 def cmd_seed_history(args, db: Database, settings) -> int:
     from . import seed_history
     target = "the configured PostgreSQL (BG_DATABASE_URL)" if settings.database_url else str(settings.db_path)
-    env = env_for(settings, "authored-fixture")
+    env = f"{settings.environment}-history-authored"  # its own environment: never collides with seed-demo records
     if not args.yes:
         print(f"This would write a week of AUTHORED demo history (environment {env}) into {target}.")
         print("Nothing was written. Re-run with --yes to do it.")
