@@ -46,6 +46,14 @@ def get_db() -> Database:
     return Database(load_settings().db_path)
 
 
+class AuthDenied(Exception):
+    """401/403 with a stable machine-readable code so the UI can explain it."""
+
+    def __init__(self, status: int, code: str, message: str):
+        super().__init__(message)
+        self.status, self.code, self.message = status, code, message
+
+
 def _err(status: int, code: str, message: str, headers: dict[str, str] | None = None) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}}, headers=headers)
 
@@ -108,6 +116,11 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
                 409: "conflict"}.get(exc.status_code, "error")
         return _err(exc.status_code, code, str(exc.detail), headers=exc.headers)
 
+    @app.exception_handler(AuthDenied)
+    async def _auth_denied(_: Request, exc: AuthDenied):
+        headers = {"WWW-Authenticate": "Bearer"} if exc.status == 401 else None
+        return _err(exc.status, exc.code, exc.message, headers=headers)
+
     @app.exception_handler(service.NotFound)
     async def _nf(_: Request, exc: service.NotFound):
         return _err(404, "not_found", str(exc))
@@ -132,35 +145,35 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
             return None
         supplied = auth.bearer_token(request.headers.get("authorization"))
         if supplied is None:
-            raise HTTPException(401, "sign-in required", headers={"WWW-Authenticate": "Bearer"})
+            raise AuthDenied(401, "sign_in_required", "sign-in required")
         try:
             return auth.identity_from(supplied, verify)
         except auth.InvalidToken:
-            raise HTTPException(401, "sign-in invalid or expired", headers={"WWW-Authenticate": "Bearer"}) from None
+            raise AuthDenied(401, "sign_in_invalid", "sign-in invalid or expired") from None
         except auth.NotAllowed:
-            raise HTTPException(403, "a verified email is required") from None
+            raise AuthDenied(403, "email_unverified", "a verified email is required") from None
 
     def require_admin(request: Request) -> None:
         """Server-side gate for /api/admin/*: the shared token (offline fallback) OR a
         Firebase sign-in whose verified email is allowlisted. Fails closed."""
         firebase_admin = verify is not None and bool(admins)
         if not token and not firebase_admin:
-            raise HTTPException(403, "admin access is not configured on this server")
+            raise AuthDenied(403, "admin_not_configured", "admin access is not configured on this server")
         supplied = auth.bearer_token(request.headers.get("authorization"))
         if supplied is None:
-            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"})
+            raise AuthDenied(401, "unauthorized", "admin credentials required")
         if auth.is_shared_admin_token(supplied, token):
             return
         if verify is None:
-            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"})
+            raise AuthDenied(401, "unauthorized", "admin credentials required")
         try:
             who = auth.identity_from(supplied, verify)
         except auth.InvalidToken:
-            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"}) from None
+            raise AuthDenied(401, "unauthorized", "admin credentials required") from None
         except auth.NotAllowed:
-            raise HTTPException(403, "a verified email is required") from None
+            raise AuthDenied(403, "email_unverified", "a verified email is required") from None
         if who.email not in admins:
-            raise HTTPException(403, "this account is not an admin")
+            raise AuthDenied(403, "not_admin", "this account is not an admin")
 
     def _aware(name: str, raw: str | None) -> datetime | None:
         if raw is None:

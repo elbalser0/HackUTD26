@@ -236,6 +236,16 @@ Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not 
 - **What it proves:** who submitted the explanation, **not** who made the console change.
 - **Health:** `GET /api/health` includes `auth: {firebase_project_id, writes_require_sign_in, admin_via_firebase, admin_via_shared_token}`. No secrets are included.
 - **Tokens:** the server verifies the token's signature, expiry, audience (the project id) and issuer with Google's public keys. Token values are never echoed in errors.
+- **Error codes** (`error.code`), so the UI can explain each case:
+
+| Status | Code | Meaning |
+|---|---|---|
+| 401 | `sign_in_required` | Write sent with no Bearer token while sign-in is required |
+| 401 | `sign_in_invalid` | Bad, expired or forged ID token |
+| 401 | `unauthorized` | Admin call with missing or wrong credentials |
+| 403 | `email_unverified` | Valid sign-in, but the Google account's email isn't verified |
+| 403 | `not_admin` | Valid sign-in, but the email isn't in `BG_ADMIN_EMAILS` |
+| 403 | `admin_not_configured` | No shared token and no Firebase admins are configured |
 
 ## Admin log (R9)
 
