@@ -1,0 +1,14 @@
+**/.env
+**/.env.*
+.git
+.hermes
+node_modules
+dist
+**/.venv
+**/__pycache__
+**/*.db
+**/*.db-*
+**/*.tfstate*
+**/*.tfvars
+**/.terraform
+break-glass-infra
