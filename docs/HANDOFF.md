@@ -1,12 +1,12 @@
 # Handoff for the next agent
 
-Written 2026-11-07 after PR #11. Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
+Written 2026-11-07 after PR #11; updated after PR #16 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
 
 ## What this is
 
 **Break-Glass Handoff** (HackUTD26, NMC² challenge). When an engineer changes infrastructure by hand during an incident, a later `terraform apply` can silently undo it. The backend detects the manual change from a Terraform refresh-only plan, stores the explanation, and the guarded `breakglass apply` wrapper pauses an apply that would reverse it, requiring an explicit decision. History is append-only. The web UI is read-only and never runs Terraform. Demo target: one DigitalOcean firewall (`digitalocean_firewall.demo`, "break-glass-demo") in `break-glass-infra/`.
 
-Team: Daniel (product, frontend; the user you are working with and the only machine that holds the Terraform state), Samuel (backend), Andrew (infrastructure).
+Team: Daniel (product, frontend; the only machine that holds the Terraform state), Samuel (backend), Andrew (infrastructure). Either Daniel or Samuel may be the user you are working with; check the git user. Real Terraform steps run only on Daniel's machine.
 
 ## How the user wants you to work
 
@@ -19,16 +19,19 @@ These came from corrections and approvals in earlier sessions. Follow them.
 - **Be honest about verification.** Say what ran on real Terraform, what ran only against authored fixtures or a mocked runner, and what has not run. Don't report acceptance criteria as done unless they were verified.
 - Keep answers short. Recommend, don't survey. Refer to people with they/them unless told otherwise.
 
-## State of the code (main, after PR #11)
+## State of the code (main, after PR #16)
 
 | Piece | Where | Notes |
 |---|---|---|
 | Detector, matcher, rules | `backend/breakglass/{detector,matcher,rules,suggest}.py` | Only `digitalocean_firewall` `inbound_rule` is interpreted; anything else is reported as unsupported, never as "no drift". Null and empty collections compare equal (`detector._empty_is_none`). |
 | Records, append-only events, runs | `db.py`, `service.py`, SQLite | Reports, decisions, wrapper reviews and run start/finish are never overwritten. |
-| Guarded apply wrapper | `wrapper.py`, CLI `breakglass apply` | Review (decision, rationale, reviewer, plan fingerprint) is saved in one transaction with the run marked `running` before Terraform runs. Runs with no recorded completion become `unknown`. |
+| Guarded apply wrapper | `wrapper.py`, CLI `breakglass apply` | Review (decision, rationale, reviewer, plan fingerprint) is saved in one transaction with the run marked `running` before Terraform runs. Runs with no recorded completion become `unknown`. Keep and defer require a rationale (otherwise the run is recorded as a cancel); cancel never does. |
+| Demo reset | `demo.py`, CLI `breakglass demo-reset` | Typed confirmation, wipes local demo data, checks the Terraform dir, token presence, admin auth and API, then runs a read-only refresh-only plan (never applied, never ingested). Leftover drift exits 2; a failed check is "could not verify", never clean. |
+| Database | `backend/breakglass.db` (SQLite, WAL; `BG_DB_PATH` overrides) | Tables `records`, `apply_runs`, `events` (append-only), `scans`. Persists across restarts; local to one machine, no shared store. |
+| Google sign-in | `auth.py`, `src/auth.ts`, `src/components/AuthProvider.tsx` | Off unless `BG_FIREBASE_PROJECT_ID` is set. Then web writes need a verified-email Firebase ID token (401/403 with distinct codes) and record the email as `google-account (verified sign-in)`; reads stay open. Full-page sign-in, header account bar, session ends when the tab closes; a fresh ID token per write, none stored. The Firebase web config (`VITE_FIREBASE_*`) is public. |
 | HTTP API | `api.py`, `docs/API.md` | Read plus annotate only; no route runs Terraform. |
-| Admin log (PRD R9 backend) | `admin.py`, `/api/admin/log`, `/api/admin/records/{id}/timeline` | Bearer token from `BG_ADMIN_TOKEN`, fails closed, one shared token (no per-admin identity). Reads events, records and runs. |
-| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` (branch `feat/admin-dashboard-ui`; verified with stubs and fixtures only). |
+| Admin log (PRD R9 backend) | `admin.py`, `/api/admin/log`, `/api/admin/records/{id}/timeline` | Fails closed. Accepts a Firebase sign-in whose email is in `BG_ADMIN_EMAILS` (signed-in non-admins get 403), or the shared fallback token `BG_ADMIN_TOKEN`. Reads events, records and runs. |
+| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` ("Continue as <email>" or the shared token; verified with stubs and fixtures only). |
 | Real captures and replay tests | `backend/tests/fixtures/real/`, `tests/test_real_replay.py` | Sanitized (fake firewall id, `203.0.113.10`, fake droplet id). Its README lists what was replaced. |
 | CI | `.github/workflows/ci.yml` | Two jobs: frontend (`lint`, `test`, `build`) and `backend` (`pytest`, offline). |
 
@@ -50,7 +53,9 @@ The older `/api/records` and `/api/apply-runs` endpoints are still unauthenticat
 - A drift-free refresh-only plan. The provider noise kept `resource_drift` present in every capture, so the assumption that a missing key means no drift (open issue I2) is unchecked.
 - The 409 and 422 UI cases against the real backend.
 
-Actors are self-reported or the local OS user (labelled "not verified"). Nothing here proves service health.
+**Run by the team, not by an agent:** the Google sign-in UI against a real Firebase project (2026-11-07), reported working. The team plans to improve it.
+
+Wrapper actors are self-reported or the local OS user (labelled "not verified"). Nothing here proves service health.
 
 ## Running things
 
@@ -98,9 +103,9 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 
 ## Next steps
 
-1. **Admin dashboard UI (PRD R9 UI)**: built; next, run it against the real backend (`BG_ADMIN_TOKEN` throwaway). It was built test-first over `/api/admin/log` and `/api/admin/records/{id}/timeline`. It needs a design for supplying `BG_ADMIN_TOKEN` (bearer header only; don't put it in a URL; think about where it is held in the browser). Show actors with their assurance label, `unknown` outcomes plainly, and the `gaps` and `limitations` the API returns. Filters are engineer, resource, time and outcome.
+1. **Google sign-in UI improvements**: the team ran it and it works; they plan to improve it. Wait for their direction. Then run the admin dashboard UI against the real backend (signed-in admin email, or a throwaway `BG_ADMIN_TOKEN`; bearer header only, never in a URL).
 2. **Optional real spike items, each needing approval:** a confirmed revert or override apply (reviewed-plan execution, changed-plan abort), the keep-path state sync (H5), and capturing a drift-free refresh-only plan (likely needs `terraform apply` of a refresh-only plan to clear the provider noise in state; that changes state only).
-3. **Decisions for the user:** per-admin identity (the token is shared), whether `/api/records` and `/api/apply-runs` should also require authorization, retention, and the 409/422 UI states.
+3. **Decisions for the user:** whether the shared `BG_ADMIN_TOKEN` fallback stays now that per-admin sign-in exists, whether the local SQLite file is enough or the history needs a shared store, whether `/api/records` and `/api/apply-runs` should also require authorization, retention, and the 409/422 UI states.
 4. **Later, only after the core demo works:** analytics and the classifier (PRD §7, proposed). The user asked to skip the demo script, fallback video and sponsor conversations for now; don't start them unprompted.
 
 ## Key files
