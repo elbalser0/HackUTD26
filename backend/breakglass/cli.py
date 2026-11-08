@@ -57,40 +57,37 @@ def _print_record(r, out: Callable[[str], None] = print) -> None:
     out(f"    {reason} {who}".rstrip())
 
 
-def _parse_one_line(line: str) -> tuple[str | None, str]:
-    """'Paul: opened 8443 for payment webhook' -> ('Paul', 'opened 8443 ...').
-    No colon -> reporter None."""
-    if ":" in line:
-        name, reason = line.split(":", 1)
-        name = name.strip()
-        # Only treat the prefix as a name if it looks like one (short, <= 3 words).
-        if 0 < len(name) <= 40 and len(name.split()) <= 3:
-            return name, reason.strip()
-    return None, line.strip()
-
-
 def prompt_for_reasons(db: Database, record_ids: list[str], ask: Callable[[str], str] = input,
                        out: Callable[[str], None] = print) -> None:
-    """The one-line, pre-filled handoff prompt (~10 seconds per record)."""
+    """The handoff prompt (~10 seconds per record): show what Argus detected,
+    then ask only why, who, and the intent. Skipping keeps the record unexplained."""
     for rid in record_ids:
         row = db.get_record(rid)
         if row is None or row["reason"] or row["resolution"] != "open":
             continue
         r = service.record_out(row)
         out("")
-        out(f"Manual change detected (detected {r.first_detected_at:%H:%M} UTC): {safe(r.summary)}")
-        line = ask("What did you change and why? 'name: reason' (Enter to skip): ").strip()
-        if not line:
+        out(f"Argus detected a manual change (detected {r.first_detected_at:%H:%M} UTC):")
+        out(f"  {safe(r.resource_address)}: {safe(r.summary)}")
+        reason = safe(ask("Why was this change needed? (Enter to skip): ")).strip()
+        if not reason:
             out("Skipped. The apply-time warning will say 'no reason recorded'.")
             continue
-        reporter, reason = _parse_one_line(safe(line))
-        if not reason:
-            out("Skipped (empty reason).")
-            continue
+        reporter = safe(ask("Your name (Enter to skip): ")).strip()[:80] or None
         key = ask("Keep it, revert it, or unsure? [k/r/u, Enter=skip]: ").strip().lower()[:1]
         service.report(db, rid, ReportIn(reporter=reporter, reason=reason[:500], intent=INTENT_KEYS.get(key)),
                        source="cli")
-        out("Saved (self-reported).")
+        out("Saved (self-reported). A later `breakglass apply` that would undo this change will show this reason.")
+
+
+def _hint_unexplained(db: Database, record_ids: list[str], out: Callable[[str], None] = print) -> None:
+    """Non-interactive scan: never skip the question silently."""
+    for rid in record_ids:
+        row = db.get_record(rid)
+        if row is None or row["reason"] or row["resolution"] != "open":
+            continue
+        out(f"Not an interactive terminal, so no reason was asked for {rid}. Add one with: "
+            f'breakglass report {rid} --reason "..." --reporter "..."')
 
 
 # --------------------------------------------------------------------------
@@ -127,8 +124,11 @@ def cmd_scan(args, db: Database, settings) -> int:
           f"{len(res.superseded_ids)} superseded, {len(res.stale_ids)} no longer drifting (stale; run recheck).")
     for note in res.unsupported:
         print(f"  NOT CHECKED (outside supported coverage): {safe(note)}")
-    if not args.no_prompt and sys.stdin.isatty():
-        prompt_for_reasons(db, res.new_ids + res.seen_ids)
+    if not args.no_prompt:
+        if sys.stdin.isatty():
+            prompt_for_reasons(db, res.new_ids + res.seen_ids)
+        else:
+            _hint_unexplained(db, res.new_ids + res.seen_ids)
     return 0
 
 

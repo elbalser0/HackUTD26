@@ -27,16 +27,6 @@ def _open_rows(db_path):
         db.close()
 
 
-@pytest.mark.parametrize("line,expected", [
-    ("Paul: payment webhook blocked", ("Paul", "payment webhook blocked")),
-    ("Paul Smith: opened 8443", ("Paul Smith", "opened 8443")),
-    ("opened 8443 for webhook", (None, "opened 8443 for webhook")),
-    ("changed the firewall because of the outage: webhooks failing", (None, "changed the firewall because of the outage: webhooks failing")),
-])
-def test_one_line_parsing(line, expected):
-    assert cli._parse_one_line(line) == expected
-
-
 def test_seed_demo_is_labeled_authored(db_path, capsys):
     assert cli.main(["seed-demo"]) == 0
     rows = _open_rows(db_path)
@@ -68,20 +58,34 @@ def test_scan_malformed_fails_loudly(db_path, capsys):
 def test_prompt_for_reasons_one_line(tmp_path):
     db = Database(tmp_path / "p.db")
     res = service.ingest_refresh_plan(db, "demo", cli._load_json(str(FIX / "refresh_drift_8443.json")))
-    answers = iter(["Paul: payment webhook blocked", "k"])
+    answers = iter(["payment webhook blocked", "Paul", "k"])
     lines: list[str] = []
-    cli.prompt_for_reasons(db, res.new_ids, ask=lambda _: next(answers), out=lines.append)
+    asked: list[str] = []
+    cli.prompt_for_reasons(db, res.new_ids, ask=lambda q: (asked.append(q), next(answers))[1], out=lines.append)
     row = db.get_record(res.new_ids[0])
     assert (row["reporter"], row["reason"], row["intent"]) == ("Paul", "payment webhook blocked", "keep")
-    assert any("8080" in l and "8443" in l for l in lines), "prompt must be pre-filled with the change"
+    assert any("8080" in l and "8443" in l for l in lines), "prompt must show what Argus detected"
+    assert asked[0].startswith("Why was this change needed?")
+    assert asked[1].startswith("Your name")
+
+
+def test_prompt_name_optional(tmp_path):
+    db = Database(tmp_path / "p.db")
+    res = service.ingest_refresh_plan(db, "demo", cli._load_json(str(FIX / "refresh_drift_8443.json")))
+    answers = iter(["opened 8443: webhooks failing", "", ""])
+    cli.prompt_for_reasons(db, res.new_ids, ask=lambda _: next(answers), out=lambda _: None)
+    row = db.get_record(res.new_ids[0])
+    assert (row["reporter"], row["reason"], row["intent"]) == (None, "opened 8443: webhooks failing", "unset")
 
 
 def test_prompt_skip_leaves_reason_null(tmp_path):
     db = Database(tmp_path / "p.db")
     res = service.ingest_refresh_plan(db, "demo", cli._load_json(str(FIX / "refresh_drift_8443.json")))
     lines: list[str] = []
-    cli.prompt_for_reasons(db, res.new_ids, ask=lambda _: "", out=lines.append)
+    asked: list[str] = []
+    cli.prompt_for_reasons(db, res.new_ids, ask=lambda q: (asked.append(q), "")[1], out=lines.append)
     assert db.get_record(res.new_ids[0])["reason"] is None
+    assert len(asked) == 1, "a skipped reason must not ask for a name or intent"
     assert any("no reason recorded" in l for l in lines)
 
 
