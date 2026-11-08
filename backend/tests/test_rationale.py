@@ -1,6 +1,6 @@
 """Every wrapper decision carries a rationale (PRD §6 step 7, R6).
 
-Keep and defer REQUIRE one: without it the keep/defer is not saved and the run
+Keep REQUIRES one: without it the keep is not saved and the run
 is cancelled (nothing applied either way). Cancel ASKS for one but never
 requires it: cancelling is the safe default and must never be blocked.
 """
@@ -45,9 +45,8 @@ def reviews(db, rid):
 
 @pytest.mark.parametrize("choice,decision,intent,outcome", [
     ("k", "keep", "keep", "kept"),
-    ("d", "defer", "defer", "deferred"),
 ])
-def test_keep_and_defer_save_the_rationale(db, tmp_path, choice, decision, intent, outcome):
+def test_keep_saves_the_rationale(db, tmp_path, choice, decision, intent, outcome):
     rid = open_record(db)
     res, runner, s = run(db, tmp_path, choice, "vendor still on 8443 until Friday")
     assert res.outcome == outcome and runner.apply_calls == []
@@ -57,13 +56,13 @@ def test_keep_and_defer_save_the_rationale(db, tmp_path, choice, decision, inten
     assert db.get_record(rid)["intent"] == intent
 
 
-@pytest.mark.parametrize("choice", ["k", "d"])
+@pytest.mark.parametrize("choice", ["k"])
 @pytest.mark.parametrize("rationale", ["", "   ", "bad\x1b[2Kline"])
-def test_keep_and_defer_without_valid_rationale_are_not_saved(db, tmp_path, choice, rationale):
+def test_keep_without_valid_rationale_is_not_saved(db, tmp_path, choice, rationale):
     rid = open_record(db)
     res, runner, s = run(db, tmp_path, choice, rationale)
     assert res.outcome == "cancelled" and runner.apply_calls == []
-    assert db.get_record(rid)["intent"] == "unset", "keep/defer must not be saved without a rationale"
+    assert db.get_record(rid)["intent"] == "unset", "keep must not be saved without a rationale"
     assert [r["decision"] for r in reviews(db, rid)] == ["cancel"]
     assert "rationale is required" in s.output
 

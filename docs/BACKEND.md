@@ -72,14 +72,13 @@ SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Da
    - **Verification failed** (scan, plan JSON or match error): prints `VERIFICATION UNAVAILABLE. This is NOT a 'no conflicts' result.` Continuing requires typing `unverified-bypass` **and a rationale**.
    - **Warnings:** each shows its reason, record age, and up to 3 prior decisions. Then:
      - keep: requires a rationale, then saves intent and prints a literal-edit suggestion; no apply.
-     - defer: requires a rationale; no apply.
      - cancel: asks for a rationale but never requires one (cancelling is the safe default); no apply. Closed input or Ctrl+C also cancels.
-     - keep or defer without a valid rationale is **not saved**. The run is recorded as a cancel instead, and nothing is applied.
+     - keep without a valid rationale is **not saved**. The run is recorded as a cancel instead, and nothing is applied.
+     - The prompt offers only keep, revert and cancel. Any other answer (including the old `d` defer and `o` override) cancels and applies nothing. Older history may still show deferred and override outcomes.
      - revert: requires typing `revert`, then a rationale. If either is missing, nothing is applied, but the record's intent is saved as `revert` ("revert-not-confirmed").
-     - override: requires typing `override`, then a rationale.
    - **No warnings:** requires typing `yes`.
-   - Every decision on affected records, including keep, defer and cancel, is appended as a `review` event per record. Earlier history is never overwritten (PRD R6/R10). Runs with no affected records are recorded on the run row and its `run_started` / `run_finished` events.
-   - Every decision carries a rationale (PRD §6 step 7). It is required for keep, defer, revert, override and bypass, and optional only for cancel.
+   - Every decision on affected records, including keep, revert and cancel, is appended as a `review` event per record. Earlier history is never overwritten (PRD R6/R10). Runs with no affected records are recorded on the run row and its `run_started` / `run_finished` events.
+   - Every decision carries a rationale (PRD §6 step 7). It is required for keep, revert and bypass, and optional only for cancel.
 6. Before applying, re-hash the plan file, config and workspace. On any change it aborts (`aborted_plan_changed`).
 7. **Persist before execution (PRD R7):** in one transaction, save the review events (decision, rationale, reviewer and its assurance, plan fingerprint), set the run to `running` with `started_at`, and add a `run_started` event. If that write fails, nothing is applied and the run is `failed` ("decision could not be persisted").
 8. `terraform apply <that exact saved plan>`. A saved-plan apply doesn't prompt, so the wrapper owns confirmation. A `run_finished` event records the outcome.

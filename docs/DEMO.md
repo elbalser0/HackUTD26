@@ -51,7 +51,7 @@ is configured, including this seeded history and your real records.
 **6. The guard.** `set -a && . ./.env && set +a && ./argus apply`
 - It plans, then prints `WARNING: this apply would reverse manual emergency change(s)` with **your reason and name** and how long ago it was detected.
 - Choose **`k`** (keep, nothing applied). It asks for a **required short rationale** (type one, for example "webhook provider only supports 8443"), saves the intent, prints the Terraform edit that would make the change permanent, and applies nothing. Recommended for the demo.
-- `c` cancels (also applies nothing). **Do not choose `r` (revert) or `o` (override) live** unless the team approved a real `terraform apply` in advance: they apply to real infrastructure.
+- `c` cancels (also applies nothing). **Do not choose `r` (revert) live** unless the team approved a real `terraform apply` in advance: it applies to real infrastructure.
 
 **7. Show the trail.** UI: Overview Last apply = Kept; Events / the Record page show change, report, decision, run, with who and how trustworthy each identity is. Say: unknown outcomes are flagged, never assumed successful.
 

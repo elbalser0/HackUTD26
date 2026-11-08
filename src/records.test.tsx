@@ -193,7 +193,7 @@ test("a deep link opens its record on the matching tab", async () => {
   expect(tab(/Explained/)).toHaveAttribute("aria-pressed", "true");
 });
 
-test("the report form has no name field; saving sends the reason and intent, then moves the record to Explained", async () => {
+test("the report form has no name field; saving sends only the reason, then moves the record to Explained", async () => {
   let sent: unknown;
   setAdapter(
     stub({
@@ -209,13 +209,11 @@ test("the report form has no name field; saving sends the reason and intent, the
   fireEvent.change(screen.getByLabelText("What did you change and why?"), {
     target: { value: "one-off migration" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Keep" }));
   fireEvent.click(screen.getByRole("button", { name: "Save report" }));
   await waitFor(() => expect(sent).toBeDefined());
   expect(sent).toEqual({
     reporter: null,
     reason: "one-off migration",
-    intent: "keep",
   });
   await waitFor(() =>
     expect(tab(/Explained · 2/)).toHaveAttribute("aria-pressed", "true"),
@@ -226,7 +224,7 @@ test("the report form has no name field; saving sends the reason and intent, the
   ).toBeInTheDocument();
 });
 
-test("Undecided is sent as the 'unsure' intent; an unpicked intent is not sent", async () => {
+test("the report form has no intent buttons, and a saved report never sends an intent", async () => {
   const sent: unknown[] = [];
   setAdapter(
     stub({
@@ -238,31 +236,15 @@ test("Undecided is sent as the 'unsure' intent; an unpicked intent is not sent",
   );
   render(<App />);
   await screen.findByRole("region", { name: "digitalocean_firewall.db" });
+  expect(screen.queryByRole("group", { name: "Intent" })).toBeNull();
+  for (const n of ["Keep", "Revert", "Undecided"])
+    expect(screen.queryByRole("button", { name: n })).toBeNull();
   fireEvent.change(screen.getByLabelText("What did you change and why?"), {
     target: { value: "x" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Undecided" }));
   fireEvent.click(screen.getByRole("button", { name: "Save report" }));
   await waitFor(() => expect(sent).toHaveLength(1));
-  expect(sent[0]).toMatchObject({ intent: "unsure" });
-  cleanup();
-  window.location.hash = "#/";
-  setAdapter(
-    stub({
-      report: async (id, b) => {
-        sent.push(b);
-        return rec({ id, reason: b.reason });
-      },
-    }),
-  );
-  render(<App />);
-  await screen.findByRole("region", { name: "digitalocean_firewall.db" });
-  fireEvent.change(screen.getByLabelText("What did you change and why?"), {
-    target: { value: "y" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Save report" }));
-  await waitFor(() => expect(sent).toHaveLength(2));
-  expect(sent[1]).not.toHaveProperty("intent");
+  expect(sent[0]).not.toHaveProperty("intent");
 });
 
 test("an empty reason is refused before any request", async () => {
@@ -328,7 +310,7 @@ test("a resolved record shows no form", async () => {
   });
   expect(within(panel).queryByRole("button", { name: "Save report" })).toBeNull();
   expect(
-    within(panel).getByText(/reports and intent changes are closed/i),
+    within(panel).getByText(/reports are closed/i),
   ).toBeInTheDocument();
 });
 
