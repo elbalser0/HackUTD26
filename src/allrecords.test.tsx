@@ -182,8 +182,8 @@ test("the view switch links Records and Events, with a record count once known",
   render(<App />);
   await loaded();
   const sw = within(screen.getByRole("group", { name: "View" }));
-  expect(sw.getByRole("link", { name: "Records · 5" })).toHaveAttribute("href", "#/admin/records");
-  expect(sw.getByRole("link", { name: "Records · 5" })).toHaveAttribute("aria-current", "true");
+  expect(sw.getByRole("link", { name: "Records" })).toHaveAttribute("href", "#/admin/records");
+  expect(sw.getByRole("link", { name: "Records" })).toHaveAttribute("aria-current", "true");
   expect(sw.getByRole("link", { name: "Events" })).toHaveAttribute("href", "#/admin/events");
 });
 

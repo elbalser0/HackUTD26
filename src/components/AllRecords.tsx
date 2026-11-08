@@ -31,7 +31,6 @@ import { ErrorState, Loading, Notice } from "./States";
 
 export function AllRecords({ view, hour }: { view: "records" | "events"; hour: string | null }) {
   const records = useAsync(() => api.listRecords(), []);
-  const count = records.s.state === "ok" ? ` · ${records.s.data.records.length}` : "";
   return (
     <>
       <div className="head">
@@ -41,7 +40,7 @@ export function AllRecords({ view, hour }: { view: "records" | "events"; hour: s
         </div>
         <div className="seg" role="group" aria-label="View">
           <a href="#/admin/records" aria-current={view === "records" ? "true" : "false"}>
-            Records{count}
+            Records
           </a>
           <a href="#/admin/events" aria-current={view === "events" ? "true" : "false"}>
             Events
