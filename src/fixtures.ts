@@ -56,6 +56,9 @@ const records: EmergencyRecord[] = [
     reportedAt: ago(25 * 60),
     intent: "keep",
     lastCheckAt: ago(2),
+    reporterAssurance: "self-reported",
+    intentUpdatedAt: ago(24 * 60),
+    lastActivity: { at: ago(25 * 60), type: "report" },
   },
   {
     ...base,
@@ -72,6 +75,9 @@ const records: EmergencyRecord[] = [
     reportedAt: null,
     intent: "unset",
     lastCheckAt: ago(2),
+    reporterAssurance: null,
+    intentUpdatedAt: null,
+    lastActivity: { at: ago(90), type: "detected" },
   },
 ];
 
@@ -87,6 +93,130 @@ const gate = async () => {
 };
 
 export const fixtureAdapter: Adapter = {
+  /** Fake history for ?fixture=admin, built from the fixture record. */
+  async adminRecordTimeline(id) {
+    await gate();
+    const r = find(id);
+    const events: AdminEvent[] = [
+      {
+        at: r.firstDetectedAt,
+        type: "change_detected",
+        environment: r.environment,
+        recordIds: [r.id],
+        runId: null,
+        resourceAddresses: [r.resourceAddress],
+        actor: null,
+        actorAssurance: "system",
+        outcome: null,
+        planFingerprint: null,
+        detail: r.summary,
+      },
+      ...(r.reason
+        ? [
+            {
+              at: r.reportedAt ?? r.firstDetectedAt,
+              type: "explained" as const,
+              environment: r.environment,
+              recordIds: [r.id],
+              runId: null,
+              resourceAddresses: [r.resourceAddress],
+              actor: r.reporter,
+              actorAssurance: "self-reported",
+              outcome: null,
+              planFingerprint: null,
+              detail: r.reason,
+            },
+          ]
+        : []),
+    ];
+    return {
+      recordId: r.id,
+      events,
+      gaps: r.reason
+        ? []
+        : [{ code: "no_reason_recorded", message: "No reason was recorded for this change.", runId: null }],
+      limitations: ["Fixture data: this history is made up."],
+    };
+  },
+  /** Fake events for ?fixture=admin, built from the fixture records. */
+  async adminEvents(f) {
+    await gate();
+    const mk = (i: number, r: EmergencyRecord): AdminEvent => ({
+      at: r.reportedAt ?? r.firstDetectedAt,
+      type: r.reason ? "explained" : "change_detected",
+      environment: r.environment,
+      recordIds: [r.id],
+      runId: null,
+      resourceAddresses: [r.resourceAddress],
+      actor: r.reporter,
+      actorAssurance: r.reporter ? "self-reported" : "system",
+      outcome: null,
+      planFingerprint: null,
+      detail: r.reason ?? `change detected (fixture event ${i})`,
+    });
+    let events = records.map((r, i) => mk(i, r));
+    if (f.resource) events = events.filter((e) => e.resourceAddresses.includes(f.resource!));
+    if (f.engineer)
+      events = events.filter((e) => e.actor?.toLowerCase() === f.engineer!.toLowerCase());
+    if (f.since) events = events.filter((e) => e.at >= f.since!);
+    if (f.until) events = events.filter((e) => e.at <= f.until!);
+    return {
+      events,
+      totalMatching: events.length,
+      limitations: ["Fixture data: these events are made up."],
+    };
+  },
+  /** Fake numbers for ?fixture=admin; derived from the fixture records so the page is coherent. */
+  async adminOverview(window) {
+    await gate();
+    const open = records.filter((r) => r.resolution === "open");
+    const missing = open.filter((r) => r.reason === null);
+    const hours = window === "7d" ? 168 : 24;
+    const top = new Date();
+    top.setUTCMinutes(0, 0, 0);
+    const activity = Array.from({ length: hours }, (_, i) => {
+      const counts: Record<string, number> =
+        i === hours - 6
+          ? { explained: 2, review: 1, run_unfinished: 1 }
+          : i === hours - 1
+            ? { explained: 1 }
+            : {};
+      return {
+        hour: new Date(top.getTime() - (hours - 1 - i) * 3_600_000).toISOString(),
+        counts,
+      };
+    });
+    return {
+      window,
+      generatedAt: ago(0),
+      openRecords: open.length,
+      openWithoutReason: missing.length,
+      needsReason: missing.map((r) => ({
+        recordId: r.id,
+        resourceAddress: r.resourceAddress,
+        summary: r.summary,
+        firstDetectedAt: r.firstDetectedAt,
+      })),
+      lastScan: { at: ago(4), status: "ok" },
+      lastRun: { runId: "run_fixture", outcome: "unknown" as const, at: ago(300) },
+      eventsByType: { explained: 3, review: 1, run_unfinished: 1 },
+      runOutcomes: { unknown: 1 },
+      activity,
+      limitations: [
+        "Fixture data: these numbers are made up. Counts are events in the window, not incidents or downtime.",
+      ],
+    };
+  },
+  /** ?fixture=admin shows the admin persona; any other fixture is an employee. */
+  async me() {
+    return {
+      signedIn: true,
+      email: "demo@example.com",
+      displayName: "Demo",
+      role: scenario() === "admin" ? "admin" : "employee",
+      authMode: "none",
+    };
+  },
   async listRecords(): Promise<RecordList> {
     await gate();
     const s = scenario();
@@ -97,6 +227,32 @@ export const fixtureAdapter: Adapter = {
       records: recs,
       health: { status: "ok", db: "ok", environment: "demo", time: ago(0) },
     };
+  },
+  async recordEvents(id) {
+    await gate();
+    const r = find(id);
+    return [
+      {
+        id: `${id}_detected`,
+        kind: "change_detected",
+        actor: null,
+        actorAssurance: "system",
+        at: r.firstDetectedAt,
+        data: {},
+      },
+      ...(r.reportedAt
+        ? [
+            {
+              id: `${id}_report`,
+              kind: "report",
+              actor: r.reporter,
+              actorAssurance: "self-reported",
+              at: r.reportedAt,
+              data: {},
+            },
+          ]
+        : []),
+    ];
   },
   async getRecord(id) {
     await gate();

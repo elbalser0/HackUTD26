@@ -30,6 +30,13 @@ def load_text(name: str) -> str:
 
 
 def memdb() -> Database:
+    """Fresh database. BG_TEST_BACKEND=postgres (with BG_TEST_DATABASE_URL) runs the suite on TimescaleDB."""
+    import os
+    if os.environ.get("BG_TEST_BACKEND") == "postgres":
+        from breakglass.postgres import PostgresDatabase
+        from pg_helpers import migrate_test_schema
+        url = os.environ["BG_TEST_DATABASE_URL"]
+        return PostgresDatabase(url, schema=migrate_test_schema(url))
     return Database(":memory:")
 
 

@@ -16,6 +16,7 @@ from typing import Any, Callable
 from . import demo, service, wrapper
 from .config import BACKEND_DIR, ConfigError, load_settings
 from .db import Database
+from .storage import StorageUnavailable, open_database
 from .models import DecisionIn, Intent, ReportIn
 from .textsafe import has_control, safe
 from .tfrunner import SCAN_PLAN, APPLY_PLAN, Terraform, TerraformError
@@ -243,7 +244,44 @@ def cmd_reset_db(args, db: Database, settings) -> int:
         print("Refusing to delete all records without --yes.")
         return 1
     db.reset()
-    print(f"Database reset: {settings.db_path}")
+    print(f"Database reset: {settings.db_path if settings.database_url is None else 'configured PostgreSQL'}")
+    return 0
+
+
+def cmd_migrate_schema(args, db, settings) -> int:
+    if settings.database_url is None:
+        print("BG_DATABASE_URL is not set; nothing to migrate (SQLite migrates itself).")
+        return 2
+    from .postgres import migrate
+    try:
+        applied = migrate(settings.database_url)
+    except StorageUnavailable as e:
+        print(f"database error: {e}")
+        return 3
+    print("Applied migrations: " + (", ".join(f"{v:03d}" for v in applied) if applied else "none (already current)"))
+    return 0
+
+
+def cmd_import_sqlite(args, db, settings) -> int:
+    from .migrate import ImportRefused, ImportVerificationFailed, import_sqlite
+    if settings.database_url is None:
+        print("import-sqlite writes into PostgreSQL: set BG_DATABASE_URL (the target) and run migrate-schema first.")
+        return 2
+    try:
+        r = import_sqlite(args.source, db, dry_run=args.dry_run)
+    except ImportRefused as e:
+        print(f"import refused: {e}")
+        return 1
+    except ImportVerificationFailed as e:
+        print(f"IMPORT VERIFICATION FAILED, do not cut over: {e}")
+        return 4
+    label = "would import" if r.dry_run else "imported"
+    print(f"{label}: " + ", ".join(f"{k}={v}" for k, v in r.imported.items())
+          + " | already present: " + ", ".join(f"{k}={v}" for k, v in r.already_present.items()))
+    if not r.dry_run:
+        print(f"verified against the source snapshot: {r.verified}; activity aggregate refreshed: {r.aggregate_refreshed}")
+    for n in r.notes:
+        print(n)
     return 0
 
 
@@ -308,6 +346,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--yes", action="store_true")
     s.set_defaults(func=cmd_reset_db)
 
+    s = sub.add_parser("migrate-schema", help="create/upgrade the PostgreSQL (Tiger Cloud) schema; needs a DDL-capable BG_DATABASE_URL")
+    s.set_defaults(func=cmd_migrate_schema)
+
+    s = sub.add_parser("import-sqlite", help="copy a SQLite history into the configured PostgreSQL (read-only source)")
+    s.add_argument("--source", required=True, help="path to the SQLite file (read through a snapshot, never modified)")
+    s.add_argument("--dry-run", action="store_true", help="validate and count without writing")
+    s.set_defaults(func=cmd_import_sqlite)
+
     s = sub.add_parser("demo-reset", help="wipe local demo data and run a read-only preflight (never changes the cloud)")
     s.add_argument("--yes", action="store_true", help="skip the typed confirmation")
     s.add_argument("--skip-cloud-check", action="store_true", help="do not run the read-only refresh-only plan")
@@ -322,9 +368,18 @@ def main(argv: list[str] | None = None) -> int:
     except ConfigError as e:
         print(f"config error: {e}")
         return 2
-    db = Database(settings.db_path)
+    if args.func is cmd_migrate_schema:  # needs DDL rights and must work before the schema exists
+        return cmd_migrate_schema(args, None, settings)
+    try:
+        db = open_database(settings)
+    except StorageUnavailable as e:
+        print(f"database error: {e}")
+        return 3
     try:
         return args.func(args, db, settings)
+    except StorageUnavailable as e:
+        print(f"database error: {e}")
+        return 3
     finally:
         db.close()
 

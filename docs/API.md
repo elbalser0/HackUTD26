@@ -301,6 +301,9 @@ Which persona the UI should show. Display only: every route still enforces acces
 - Firebase not configured → `auth_mode: "none"`, `role: null` (the UI shows its single, unsigned view).
 - Admins can still `POST` report/decision (an admin who was on call can explain their own change); the admin UI is read-only by design, not by server rule.
 
+### `GET /api/admin/analytics`
+Admin only. Hourly counts of audit events for one environment. Required query: `environment`, `since`, `until` (ISO 8601 **with timezone**). The window is widened outward to whole UTC hours, must be at most 31 days, and the window actually used is returned as `since` / `until`. Returns `backend` (`timescaledb`, a real-time continuous aggregate, or `sqlite`, computed on request in offline mode), `bucket_size`, `buckets` (`start`, `total`, `by_kind`; empty hours are included as zeros), `totals` (`by_kind`, `by_intent`, `by_decision`, `by_outcome`), `generated_at`, `freshness` and `limitations`. It counts events, not incidents, and `unknown` outcomes are never merged into failures. Invalid windows are `422`; an unreachable database is `503` (`storage_unavailable`), never zero activity. On TimescaleDB a backfill behind the aggregate's refresh watermark is not visible until its window is refreshed.
+
 ### `GET /api/admin/records/{id}/timeline`
 Oldest first: change, every explanation, every decision and review, each wrapper run that touched the record (start, and finish or unfinished), and resolution. Also returns `gaps` (`no_reason_recorded`, `no_decision_recorded`, `no_run_linked`, `run_outcome_unknown` with `run_id`) so missing evidence is visible. `404` for an unknown record.
 

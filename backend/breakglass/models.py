@@ -378,6 +378,32 @@ class TimelineOut(BaseModel):
     limitations: list[str]
 
 
+class ActivityBucket(BaseModel):
+    start: str  # UTC hour start, e.g. 2026-03-01T10:00:00Z
+    total: int
+    by_kind: dict[str, int]
+
+
+class ActivityTotals(BaseModel):
+    by_kind: dict[str, int]
+    by_intent: dict[str, int]
+    by_decision: dict[str, int]
+    by_outcome: dict[str, int]  # "unknown" is its own value, never merged into failed
+
+
+class ActivityOut(BaseModel):
+    backend: str  # "timescaledb" (continuous aggregate) | "sqlite" (offline computation)
+    bucket_size: str
+    environment: str
+    since: str  # the hour-aligned window actually used
+    until: str
+    generated_at: str
+    buckets: list[ActivityBucket]
+    totals: ActivityTotals
+    freshness: dict[str, object]
+    limitations: list[str]
+
+
 # --------------------------------------------------------------------------
 # Personas (employee / admin) and the admin overview.
 # --------------------------------------------------------------------------

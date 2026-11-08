@@ -53,6 +53,12 @@ export interface EmergencyRecord {
   lastCheckStatus: CheckStatus;
   lastCheckAt: string | null;
   evidenceSource: string;
+  /** Assurance of the latest explanation: "self-reported" or a verified Google account; null when there is no reason. */
+  reporterAssurance: string | null;
+  /** When the intent was last set (report with intent, or decision); null when never set. */
+  intentUpdatedAt: string | null;
+  /** Latest of detection ("detected"), any event for the record, and resolution ("resolved"). */
+  lastActivity: { at: string; type: string } | null;
 }
 
 export interface HealthAuth {
@@ -152,12 +158,69 @@ export interface AdminFilters {
   engineer?: string;
   resource?: string;
   outcome?: RunOutcome;
+  type?: AdminEventType;
   since?: string; // ISO 8601 with timezone
   until?: string;
 }
 
+/** One entry in a record's append-only history (report, decision, review...). */
+export interface RecordEvent {
+  id: string;
+  kind: string;
+  actor: string | null;
+  /** "self-reported" | "local-os-user (not verified)" | "system" | verified Google account. */
+  actorAssurance: string;
+  at: string;
+  data: Record<string, unknown>;
+}
+
+export type OverviewWindow = "24h" | "7d";
+
+/** GET /api/admin/overview. Counts are by event type and outcome, never by person. */
+export interface Overview {
+  window: OverviewWindow;
+  generatedAt: string;
+  openRecords: number;
+  openWithoutReason: number;
+  needsReason: {
+    recordId: string;
+    resourceAddress: string;
+    summary: string;
+    firstDetectedAt: string;
+  }[];
+  lastScan: { at: string; status: string } | null;
+  /** "unknown" = no completion recorded; NOT the same as failed, never success. */
+  lastRun: { runId: string; outcome: RunOutcome; at: string } | null;
+  eventsByType: Record<string, number>;
+  runOutcomes: Record<string, number>;
+  activity: { hour: string; counts: Record<string, number> }[];
+  limitations: string[];
+}
+
+export type Role = "admin" | "employee";
+export type AuthMode = "firebase" | "shared-token" | "none";
+
+/** GET /api/me. Display only: the server still enforces access on every route. */
+export interface Me {
+  signedIn: boolean;
+  email: string | null;
+  displayName: string | null;
+  role: Role | null;
+  authMode: AuthMode;
+}
+
 export interface Adapter {
+  /** Admin only: one record's history and gaps, with the signed-in ID token. */
+  adminRecordTimeline(id: string): Promise<Timeline>;
+  /** Admin only: team-wide events with the signed-in ID token (the token-based adminLog is the legacy screen's). */
+  adminEvents(filters: AdminFilters): Promise<AdminLog>;
+  /** Admin only. Sends the signed-in ID token; the server decides access. */
+  adminOverview(window: OverviewWindow): Promise<Overview>;
+  /** Which persona to show. Never a substitute for server-side checks. */
+  me(): Promise<Me>;
+  /** Every record, open and resolved; the UI buckets them. */
   listRecords(): Promise<RecordList>;
+  recordEvents(id: string): Promise<RecordEvent[]>;
   getRecord(id: string): Promise<EmergencyRecord>;
   report(
     id: string,
@@ -218,6 +281,11 @@ export function fromWireRecord(w: Wire): EmergencyRecord {
     lastCheckStatus: w.last_check_status,
     lastCheckAt: w.last_check_at ?? null,
     evidenceSource: w.evidence_source,
+    reporterAssurance: w.reporter_assurance ?? null,
+    intentUpdatedAt: w.intent_updated_at ?? null,
+    lastActivity: w.last_activity
+      ? { at: w.last_activity.at, type: w.last_activity.type }
+      : null,
   };
 }
 
@@ -246,6 +314,51 @@ export function fromWireApplyRun(w: Wire): ApplyRun {
     ackOutcome: w.ack_outcome,
     ackNote: w.ack_note ?? null,
     completedAt: w.completed_at ?? null,
+  };
+}
+
+export function fromWireOverview(w: Wire): Overview {
+  return {
+    window: w.window,
+    generatedAt: w.generated_at,
+    openRecords: w.open_records ?? 0,
+    openWithoutReason: w.open_without_reason ?? 0,
+    needsReason: (w.needs_reason ?? []).map((n: Wire) => ({
+      recordId: n.record_id,
+      resourceAddress: n.resource_address,
+      summary: n.summary,
+      firstDetectedAt: n.first_detected_at,
+    })),
+    lastScan: w.last_scan ? { at: w.last_scan.at, status: w.last_scan.status } : null,
+    lastRun: w.last_run
+      ? { runId: w.last_run.run_id, outcome: w.last_run.outcome, at: w.last_run.at }
+      : null,
+    eventsByType: w.events_by_type ?? {},
+    runOutcomes: w.run_outcomes ?? {},
+    activity: (w.activity ?? []).map((b: Wire) => ({ hour: b.hour, counts: b.counts ?? {} })),
+    limitations: w.limitations ?? [],
+  };
+}
+
+export function fromWireMe(w: Wire): Me {
+  return {
+    signedIn: w.signed_in === true,
+    email: w.email ?? null,
+    displayName: w.display_name ?? null,
+    // Only the two known values count; anything else is "no role", never admin.
+    role: w.role === "admin" || w.role === "employee" ? w.role : null,
+    authMode: w.auth_mode,
+  };
+}
+
+export function fromWireRecordEvent(w: Wire): RecordEvent {
+  return {
+    id: w.id,
+    kind: w.kind,
+    actor: w.actor ?? null,
+    actorAssurance: w.actor_assurance ?? "system",
+    at: w.created_at,
+    data: w.data ?? {},
   };
 }
 
@@ -356,9 +469,36 @@ async function getHealth(): Promise<Health | null> {
 }
 
 const realAdapter: Adapter = {
+  async adminRecordTimeline(id) {
+    return fromWireTimeline(
+      await http(`/admin/records/${encodeURIComponent(id)}/timeline`, {
+        headers: await signedInHeaders(),
+      }),
+    );
+  },
+  async adminEvents(f) {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);
+    const qs = q.toString();
+    return fromWireAdminLog(
+      await http(`/admin/log${qs ? `?${qs}` : ""}`, {
+        headers: await signedInHeaders(),
+      }),
+    );
+  },
+  async adminOverview(window) {
+    return fromWireOverview(
+      await http(`/admin/overview?window=${window}`, {
+        headers: await signedInHeaders(),
+      }),
+    );
+  },
+  async me() {
+    return fromWireMe(await http("/me", { headers: await signedInHeaders() }));
+  },
   async listRecords() {
     const [w, health] = await Promise.all([
-      http<Wire>("/records?resolution=open", { headers: await signedInHeaders() }),
+      http<Wire>("/records", { headers: await signedInHeaders() }),
       getHealth(),
     ]);
     return { records: (w.records ?? []).map(fromWireRecord), health };
@@ -369,6 +509,12 @@ const realAdapter: Adapter = {
         headers: await signedInHeaders(),
       }),
     );
+  },
+  async recordEvents(id) {
+    const w = await http<Wire>(`/records/${encodeURIComponent(id)}/events`, {
+      headers: await signedInHeaders(),
+    });
+    return (w.events ?? []).map(fromWireRecordEvent);
   },
   async report(id, b) {
     return fromWireRecord(

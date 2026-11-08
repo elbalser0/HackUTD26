@@ -77,6 +77,9 @@ const rec = (o: Partial<EmergencyRecord> = {}): EmergencyRecord => ({
   lastCheckStatus: "current",
   lastCheckAt: "2026-11-08T03:45:02.000000Z",
   evidenceSource: "terraform-refresh-only",
+  reporterAssurance: null,
+  intentUpdatedAt: null,
+  lastActivity: null,
   ...o,
 });
 const health = (signIn = false): Health => ({
@@ -96,6 +99,15 @@ function stub(o: Partial<Adapter> = {}): Adapter {
     getRecord: async () => rec(),
     report: async (_i, b) => rec({ reporter: b.reporter, reason: b.reason }),
     decide: async (_i, intent) => rec({ intent }),
+    adminOverview: async () => {
+      throw new Error("unused");
+    },
+    adminEvents: async () => ({ events: [], totalMatching: 0, limitations: [] }),
+    adminRecordTimeline: async () => {
+      throw new Error("unused");
+    },
+    me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
+    recordEvents: async () => [],
     getApplyRun: async () => {
       throw new Error("unused");
     },
@@ -126,7 +138,7 @@ test("not configured: no sign-in UI at all", async () => {
   setAuthClient(null);
   setAdapter(stub());
   render(<App />);
-  await screen.findByText("digitalocean_firewall.demo");
+  await screen.findByRole("region", { name: "digitalocean_firewall.demo" });
   expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
   expect(screen.queryByRole("button", { name: /sign out/i })).toBeNull();
 });
@@ -164,7 +176,9 @@ test("signing in from the sign-in page opens the app with the account bar", asyn
   render(<App />);
   fireEvent.click(screen.getByRole("button", { name: /sign in with google/i }));
   expect(auth.signIn).toHaveBeenCalledTimes(1);
-  expect(await screen.findByText("digitalocean_firewall.demo")).toBeInTheDocument();
+  expect(
+    await screen.findByRole("region", { name: "digitalocean_firewall.demo" }),
+  ).toBeInTheDocument();
   expect(screen.getByText("dana@example.com")).toBeInTheDocument();
   expect(screen.queryByText(/verified google account/i)).toBeNull();
 });
@@ -284,12 +298,8 @@ test("report form: says which verified account will save it", async () => {
   setAdapter(stub());
   window.location.hash = "#/records/r1";
   render(<App />);
-  const line = await screen.findByText(
-    (_t, el) =>
-      el?.tagName === "P" &&
-      /^Saving as dana@example\.com/.test(el.textContent ?? ""),
-  );
-  expect(line).toHaveTextContent(/not proof of who made the change/i);
+  const line = await screen.findByText(/^Saving as dana@example\.com/);
+  expect(line).toHaveTextContent(/not who made the change/i);
 });
 
 test("401 on report (expired sign-in): asks to sign in again and keeps the text", async () => {
@@ -393,6 +403,15 @@ test("listRecords sends the ID token on the records read but not on the open hea
   const health = calls.find((c) => c.url.startsWith("/api/health"));
   expect(rec && authHeader(rec)).toBe("Bearer idtok-list");
   expect(health && authHeader(health)).toBeNull();
+});
+
+test("a record's history read sends the ID token, never in the URL", async () => {
+  const calls = fetchStub();
+  setTokenProvider(async () => "idtok-events");
+  await api.recordEvents("r1");
+  const c = calls.find((x) => x.url.startsWith("/api/records/r1/events"));
+  expect(c && authHeader(c)).toBe("Bearer idtok-events");
+  expect(calls.every((x) => !x.url.includes("idtok"))).toBe(true);
 });
 
 test("signed out (no token): reads send no Authorization header", async () => {

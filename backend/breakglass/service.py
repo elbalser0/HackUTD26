@@ -179,8 +179,7 @@ class ScanOutcome:
 
 
 def _mark_open(db: Database, environment: str, status: CheckStatus, now: str, conn) -> list[str]:
-    ids = [r["id"] for r in conn.execute(
-        "SELECT id FROM records WHERE environment = ? AND resolution = 'open'", (environment,))]
+    ids = db.open_record_ids(environment, conn)
     for rid in ids:
         db.update_record(rid, {"last_check_status": status.value, "last_check_at": now}, conn)
     return ids
@@ -199,10 +198,11 @@ def ingest_refresh_plan(
     out = ScanOutcome(status="ok", unsupported=list(result.unsupported), errors=list(result.errors))
 
     with db.tx() as conn:
+        db.lock_environment(conn, environment)
         if result.errors:
             out.status = "failed"
             _mark_open(db, environment, CheckStatus.FAILED, now_s, conn)
-            db.insert_scan(new_id("scan"), environment, now_s, "failed", json.dumps(result.errors)[:2000])
+            db.insert_scan(new_id("scan"), environment, now_s, "failed", json.dumps(result.errors)[:2000], conn)
             return out
 
         seen: set[str] = set()
@@ -258,16 +258,14 @@ def ingest_refresh_plan(
 
         # Open records not observed in this successful scan: no longer drifting
         # vs state. That is NOT resolution (IaC may still disagree) -> stale until recheck.
-        for row in conn.execute(
-            "SELECT id FROM records WHERE environment = ? AND resolution = 'open'", (environment,)
-        ).fetchall():
-            if row["id"] not in seen:
-                db.update_record(row["id"], {"last_check_status": CheckStatus.STALE.value, "last_check_at": now_s}, conn)
-                out.stale_ids.append(row["id"])
+        for open_id in db.open_record_ids(environment, conn):
+            if open_id not in seen:
+                db.update_record(open_id, {"last_check_status": CheckStatus.STALE.value, "last_check_at": now_s}, conn)
+                out.stale_ids.append(open_id)
 
         db.insert_scan(new_id("scan"), environment, now_s, "ok",
                        json.dumps({"new": len(out.new_ids), "seen": len(out.seen_ids),
-                                   "unsupported": out.unsupported})[:2000])
+                                   "unsupported": out.unsupported})[:2000], conn)
     return out
 
 
@@ -275,8 +273,9 @@ def ingest_refresh_plan(
 # report / decision
 # ---------------------------------------------------------------------------
 
-def _require_open(db: Database, record_id: str):
-    row = db.get_record(record_id)
+def _require_open(db: Database, record_id: str, conn=None):
+    # Inside a transaction the row is locked so two concurrent writers cannot both pass the open check.
+    row = db.get_record(record_id, conn, for_update=conn is not None)
     if row is None:
         raise NotFound(f"record {record_id} not found")
     if row["resolution"] != Resolution.OPEN.value:
@@ -308,7 +307,7 @@ def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = 
     stays the self-reported name; without one, the account's display name is used."""
     now_s = ts(now or utcnow())
     with db.tx() as conn:
-        _require_open(db, record_id)
+        _require_open(db, record_id, conn)
         fields: dict[str, Any] = {
             "reporter": (body.reporter.strip() if body.reporter and body.reporter.strip()
                          else (account_name or account)),
@@ -320,9 +319,9 @@ def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = 
         if body.intent is not None:
             fields.update(intent=body.intent.value, intent_updated_at=now_s)
         db.update_record(record_id, fields, conn)
-        row = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()
+        environment = db.record_environment(record_id, conn)
         # Append-only history: a later report never erases an earlier one (PRD R6/R10).
-        _event(db, conn, environment=row["environment"], kind="report", record_id=record_id, run_id=None,
+        _event(db, conn, environment=environment, kind="report", record_id=record_id, run_id=None,
                actor=account or fields["reporter"], assurance=assurance, now_s=now_s,
                data={"reason": fields["reason"], "intent": body.intent.value if body.intent else None,
                      "source": source, "reporter_name": fields["reporter"]})
@@ -334,14 +333,14 @@ def decide(db: Database, record_id: str, body: DecisionIn, now: datetime | None 
     """Store intent. Never resolves, never applies."""
     now_s = ts(now or utcnow())
     with db.tx() as conn:
-        _require_open(db, record_id)
+        _require_open(db, record_id, conn)
         note = body.note.strip() if body.note and body.note.strip() else None
         db.update_record(record_id, {
             "intent": body.intent.value,
             "intent_note": note,
             "intent_updated_at": now_s,
         }, conn)
-        env = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()["environment"]
+        env = db.record_environment(record_id, conn)
         _event(db, conn, environment=env, kind="decision", record_id=record_id, run_id=None,
                actor=actor, assurance=assurance, now_s=now_s,
                data={"intent": body.intent.value, "note": note, "source": source})
@@ -450,6 +449,7 @@ def recheck(
     covered = _plan_addresses(normal_plan)
 
     with db.tx() as conn:
+        db.lock_environment(conn, environment)
         for r in open_rows:
             rid = r["id"]
             if r["fingerprint"] in drifting:
