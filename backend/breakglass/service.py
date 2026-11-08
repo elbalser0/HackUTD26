@@ -455,7 +455,7 @@ def recheck(
             if r["fingerprint"] in drifting:
                 why, status = "live value still differs from Terraform state", CheckStatus.CURRENT
             elif r["scope_key"] in drifting_scopes:
-                why, status = "live value changed again; run `breakglass scan` to record the new evidence", CheckStatus.STALE
+                why, status = "live value changed again; run `argus scan` to record the new evidence", CheckStatus.STALE
             elif r["resource_address"] in unsupported_text:
                 why, status = "refresh-only evidence for this resource was not interpretable", CheckStatus.UNSUPPORTED
             elif rid in m.unknown_ids:

@@ -142,7 +142,7 @@ and `README.md`.
 ## 7. How to run things
 - API against Tiger (user runs it, from repo root): `! set -a && . ./.env && set +a && cd backend && .venv/bin/uvicorn breakglass.api:app --port 8000`
 - UI: `npm run dev` (Vite proxies `/api` to `127.0.0.1:8000`; `?fixture` for no backend, `?fixture=admin` for the admin persona).
-- CLI is `backend/.venv/bin/python -m breakglass.cli ...` from the repo root. `breakglass migrate-schema`, `breakglass import-sqlite --source PATH [--dry-run]`.
+- CLI is `./argus ...` from the repo root. `argus migrate-schema`, `argus import-sqlite --source PATH [--dry-run]`.
 - Check which backend the API is on: save a report in the UI, then `show` the record in the CLI with `.env` sourced.
 - The user's local `backend/breakglass.db` is the rollback copy of the pre-Tiger history; leave it alone.
 - Browser checks: use the Chrome tools (load them with ToolSearch, call `tabs_context_mcp` first, create your own tab, close it when done). Start Vite on a spare port (`npm run dev -- --port 5199`) and kill it after.

@@ -29,7 +29,7 @@ Admin is read-only: no report form. Copy rules: detected time is when the scanne
 - [x] Live check (2026-11-08): real API on Tiger Cloud, Chrome, signed in with Google as a non-admin and then as an admin. Verified: `/api/me` role detection, a real `403 not_admin` that fails closed to the old screen, the employee Records page, the admin Overview, All records, Events, Record page and admin palette on real data, and no horizontal overflow at 375 and 320 px.
 - [x] Scratch-stack check (2026-11-08): real API on a local TimescaleDB (not Tiger), a real unfinished run, and the UI in Chrome. Verified: Overview shows Last apply "Unknown" with "no completion recorded" and Run outcomes "Unknown 1" (never failed); the admin Record page shows the unfinished run and the "Run outcome unknown" gap; the employee palette on real data; a real `503 storage_unavailable` shows an error with Retry in the admin Overview and the employee page, never zeros. The sign-in gate was bypassed with a throwaway shared token behind a local header-adding proxy and the Firebase variables blanked, so this did not exercise Google sign-in.
 - [ ] Not yet verified: a real phone, the shared-token screen, and a real unknown outcome on Tiger Cloud (the check above used local Postgres with an authored run)
-- [ ] Apply-run view against a REAL run (none exists; runs are created only by `breakglass apply` in the terminal, which needs real infra)
+- [ ] Apply-run view against a REAL run (none exists; runs are created only by `argus apply` in the terminal, which needs real infra)
 - [x] Dead code removed (2026-11-08): `RecordDetail.tsx` and `RecordList.tsx`; `Freshness` now lives in `components/Freshness.tsx`
 
 ## Google sign-in (Firebase)
@@ -55,7 +55,7 @@ Admin is read-only: no report form. Copy rules: detected time is when the scanne
 
 ## Running
 
-Backend: see docs/API.md (`breakglass seed-demo --with-report`, `uvicorn breakglass.api:app --port 8000`).
+Backend: see docs/API.md (`argus seed-demo --with-report`, `uvicorn breakglass.api:app --port 8000`).
 Frontend: `npm run dev` — Vite proxies `/api` to `http://127.0.0.1:8000` (override `API_TARGET`). No absolute base URL, so no CORS dependence.
 Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE DATA" badge).
 

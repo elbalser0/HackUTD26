@@ -9,7 +9,7 @@ The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scop
 | Piece | Where | State |
 |---|---|---|
 | Detector, matcher, SQLite records, report and decision history, FastAPI, CLI, guarded apply wrapper, `recheck` | `backend/` | Tested offline against hand-written (authored) fixtures and a mocked Terraform runner, and replayed against sanitized **real** captures in `backend/tests/fixtures/real/`. |
-| CLI handoff | `breakglass scan` → later `breakglass apply` | Primary way to capture reasons: the scan shows what was detected and asks "Why was this change needed?" and a name; the apply warning shows that reason, or "no reason recorded". Verified offline; not yet run on real Terraform with this prompt. |
+| CLI handoff | `argus scan` → later `argus apply` | Primary way to capture reasons: the scan shows what was detected and asks "Why was this change needed?" and a name; the apply warning shows that reason, or "no reason recorded". Verified offline; not yet run on real Terraform with this prompt. |
 | Web UI: employee Records page and palette, admin shell (Overview, All records, Record, palette), apply-warning view | `src/` | Built (redesign, stub and fixture checked; not yet run against the real API). Read-only: it **never runs Terraform**. The CLI owns execution and approval. |
 | Demo Terraform (firewall `digitalocean_firewall.demo`) | `break-glass-infra/` | Firewall **applied** from Daniel's machine, the single operator that holds the Terraform state. It is not attached to the droplet (`attach_firewall = false`). The droplet already existed; Terraform manages only the firewall. |
 | Real Terraform spike | `backend/tests/fixtures/real/` | **Mostly done (2026-11-07).** Verified on real Terraform and DigitalOcean: a console-added rule is detected (`before` is state, `after` is live), the normal plan's reversal is matched, the wrapper pauses (cancel and keep, nothing applied) with and without a reason, the UI and admin log show the live records and runs, and `recheck` resolved the real record as `verified_aligned` after the rule was deleted, with its history intact. Real findings: the provider reports `droplet_ids`/`tags` as `null` in state and `[]` live, which used to block `recheck`; null and empty collections now compare equal. **Not yet run for real:** a confirmed revert/override apply (reviewed-plan execution, changed-plan abort), the keep-path state sync, and a drift-free refresh-only plan. |
@@ -37,9 +37,11 @@ npm ci
 cd backend
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-breakglass seed-demo --with-report
+argus seed-demo --with-report
 uvicorn breakglass.api:app --port 8000
 ```
+
+**CLI name.** The command is `argus` (installed by `pip install -e`). From a checkout, `./argus <command>` runs it without installing anything. If your virtualenv predates the rename, re-run `pip install -e ".[dev]"` to get the `argus` command. Nothing broke: the original `breakglass` command, `python -m breakglass.cli`, the `breakglass` Python package, the `BG_*` settings and `uvicorn breakglass.api:app` all still work.
 
 **Frontend**, in a second terminal at the repo root:
 
@@ -66,6 +68,7 @@ GitHub Actions runs the frontend checks on pushes and pull requests.
 - [docs/API.md](docs/API.md): HTTP contract between backend and UI
 - [docs/BACKEND.md](docs/BACKEND.md): backend status, rules, guarded apply, runbooks
 - [docs/FRONTEND.md](docs/FRONTEND.md): UI status and verification evidence
+- [docs/DEMO.md](docs/DEMO.md): live demo runbook (Tiger, Terraform, DigitalOcean), including the week of authored history
 - [docs/PROJECT.md](docs/PROJECT.md): living decisions and next gate
 - [docs/HANDOFF.md](docs/HANDOFF.md): current state, working rules, verified versus unverified, and next steps for the next agent
 

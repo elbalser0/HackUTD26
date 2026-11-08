@@ -9,7 +9,7 @@ cd backend
 python -m venv .venv
 # Windows: .venv\Scripts\activate   macOS/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-breakglass seed-demo --with-report  # AUTHORED demo record: environment "demo-authored", evidence_source "authored-fixture"
+argus seed-demo --with-report  # AUTHORED demo record: environment "demo-authored", evidence_source "authored-fixture"
 uvicorn breakglass.api:app --port 8000
 ```
 
@@ -315,4 +315,4 @@ Oldest first: change, every explanation, every decision and review, each wrapper
 
 ## Deliberately not in the HTTP API
 
-Scan, apply, re-check and any Terraform execution are **CLI-only** (`breakglass scan|apply|recheck`). The HTTP API never runs Terraform and never accepts commands or paths. The browser is a read-and-annotate surface. Applying stays a human decision in the terminal.
+Scan, apply, re-check and any Terraform execution are **CLI-only** (`argus scan|apply|recheck`). The HTTP API never runs Terraform and never accepts commands or paths. The browser is a read-and-annotate surface. Applying stays a human decision in the terminal.

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Argus CLI launcher: runs the backend CLI from this checkout without installing anything.
+#   ./argus scan        ./argus apply        ./argus --help
+# Uses backend/.venv if present (override with ARGUS_PYTHON), else python3.
+here=$(cd "$(dirname "$0")" && pwd)
+py=${ARGUS_PYTHON:-$here/backend/.venv/bin/python}
+[ -x "$py" ] || py=python3
+PYTHONPATH="$here/backend${PYTHONPATH:+:$PYTHONPATH}" exec "$py" -m breakglass.cli "$@"

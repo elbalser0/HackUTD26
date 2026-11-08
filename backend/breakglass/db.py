@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS apply_runs (
 );
 
 -- Append-only history (PRD R6/R10). Rows are never updated or deleted by the app
--- (only `breakglass reset-db --yes` clears demo data).
+-- (only `argus reset-db --yes` clears demo data).
 CREATE TABLE IF NOT EXISTS events (
     id TEXT PRIMARY KEY,
     environment TEXT NOT NULL,

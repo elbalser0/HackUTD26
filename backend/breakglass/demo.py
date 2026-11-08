@@ -1,4 +1,4 @@
-"""`breakglass demo-reset`: start each rehearsal from a known-clean state.
+"""`argus demo-reset`: start each rehearsal from a known-clean state.
 
 1. Wipes local demo data (records, history events, apply runs, scans) after an
    explicit confirmation.
@@ -109,5 +109,5 @@ def demo_reset(db: Database, settings: Settings, tf: Terraform | None, *,
     for note in result.unsupported:
         out(f"[DRIFT] not checked: {safe(note)}")
     out("Remove the leftover change in the DigitalOcean console (Networking -> Firewalls -> break-glass-demo), "
-        "then run `breakglass demo-reset --yes` again. This command never changes the cloud.")
+        "then run `argus demo-reset --yes` again. This command never changes the cloud.")
     return 2
