@@ -68,9 +68,9 @@ targets, wrapping of long names and hashes, `.top` height, `.tag` wrapping); `sr
 
 ## 2. Rules the user has set (follow these)
 - **Never read, grep, cat or source `.env`.** Give the user a command to run instead, for example
-  `! set -a && . ./.env && set +a && <command>` from the repo root (ask for output, not secrets). Main now also loads
-  `BG_*` from the repo-root `.env` itself (`backend/breakglass/config.py`); check how that interacts with
-  `BG_DATABASE_URL` without reading the file.
+  `! set -a && . ./.env && set +a && <command>` from the repo root (ask for output, not secrets). The backend loads
+  `BG_*` from the repo-root `.env` itself (`backend/breakglass/config.py`), **including `BG_DATABASE_URL`**, so a
+  plain backend start uses Tiger when that line is in `.env` (a terminal value wins).
 - **Test first**: write the failing test, see it fail for the right reason, implement, then **mutation-check** the
   important logic (break it on purpose, confirm a test fails, restore). This session found real gaps that way; keep doing it.
 - The PRD (`docs/Break-Glass Handoff — PRD.md`) is the source of truth.
@@ -140,7 +140,7 @@ and `README.md`.
 - Commit, push, PR and merge only when asked. The user has been saying "commit this", "push", "merge" after each slice.
 
 ## 7. How to run things
-- API against Tiger (user runs it, from repo root): `! set -a && . ./.env && set +a && cd backend && .venv/bin/uvicorn breakglass.api:app --port 8000`
+- API against Tiger (user runs it): `cd backend && .venv/bin/uvicorn breakglass.api:app --port 8000` (Windows: `.venv\Scripts\uvicorn.exe`). `BG_DATABASE_URL` and the other `BG_*` settings come from the repo-root `.env`; sourcing it is no longer needed for the API.
 - UI: `npm run dev` (Vite proxies `/api` to `127.0.0.1:8000`; `?fixture` for no backend, `?fixture=admin` for the admin persona).
 - CLI is `./argus ...` from the repo root. `argus migrate-schema`, `argus import-sqlite --source PATH [--dry-run]`.
 - Check which backend the API is on: save a report in the UI, then `show` the record in the CLI with `.env` sourced.

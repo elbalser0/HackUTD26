@@ -138,5 +138,5 @@ def load_settings() -> Settings:
         firebase_project_id=(env.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
         admin_emails=tuple(e.strip().lower() for e in env.get("BG_ADMIN_EMAILS", "").split(",")
                            if e.strip()),
-        database_url=_database_url(os.environ.get("BG_DATABASE_URL")),
+        database_url=_database_url(env.get("BG_DATABASE_URL")),
     )
