@@ -50,10 +50,10 @@ def db(tmp_path):
     d.close()
 
 
-def make_client(db, *, firebase=True, admin_token=SHARED, admins=("lead@example.com",)):
+def make_client(db, *, firebase=True, admin_token=SHARED, admins=("lead@example.com",), all_admins=False):
     app = create_app(db=db, allowed_hosts=["testserver"], admin_token=admin_token,
                      firebase_project_id=PROJECT if firebase else "",
-                     admin_emails=list(admins), verifier=fake_verifier)
+                     admin_emails=list(admins), verifier=fake_verifier, all_admins=all_admins)
     return TestClient(app)
 
 
@@ -241,3 +241,21 @@ def test_admin_error_codes(db):
         assert _code(c.get("/api/admin/log", headers=bearer("tok-unverified"))) == (403, "email_unverified")
     with make_client(db, firebase=False, admin_token="") as c:
         assert _code(c.get("/api/admin/log", headers=bearer("x"))) == (403, "admin_not_configured")
+
+
+def test_all_admins_makes_every_verified_sign_in_an_admin(db):
+    with make_client(db, admins=(), all_admins=True) as c:
+        assert c.get("/api/admin/log", headers=bearer("tok-dana")).status_code == 200
+        assert c.get("/api/me", headers=bearer("tok-dana")).json()["role"] == "admin"
+
+
+def test_all_admins_still_needs_a_verified_sign_in(db):
+    with make_client(db, admins=(), all_admins=True) as c:
+        assert c.get("/api/admin/log").status_code == 401
+        assert c.get("/api/admin/log", headers=bearer("tok-unverified")).status_code == 403
+        assert c.get("/api/admin/log", headers=bearer("wrong")).status_code == 401
+
+
+def test_all_admins_needs_firebase_to_be_on(db):
+    with make_client(db, firebase=False, admin_token="", admins=(), all_admins=True) as c:
+        assert c.get("/api/admin/log", headers=bearer("tok-dana")).status_code == 403

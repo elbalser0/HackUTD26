@@ -43,6 +43,8 @@ class Settings:
     # Set = web writes require sign-in; admin log also accepts listed admin emails.
     firebase_project_id: str | None = None
     admin_emails: tuple[str, ...] = ()
+    # Demo mode: every verified Google sign-in is an admin (BG_ALL_ADMINS=1). Admin screens are read-only.
+    all_admins: bool = False
     # PostgreSQL / Tiger Cloud DSN. Secret: never logged, echoed or committed. Unset = explicit SQLite mode.
     database_url: str | None = field(default=None, repr=False)
 
@@ -138,5 +140,6 @@ def load_settings() -> Settings:
         firebase_project_id=(env.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
         admin_emails=tuple(e.strip().lower() for e in env.get("BG_ADMIN_EMAILS", "").split(",")
                            if e.strip()),
+        all_admins=(env.get("BG_ALL_ADMINS") or "").strip().lower() in ("1", "true", "yes"),
         database_url=_database_url(env.get("BG_DATABASE_URL")),
     )
