@@ -260,7 +260,7 @@ def test_wrapper_review_is_linked_to_run_plan_and_reviewer(client, db, tmp_path)
 
 def test_default_reviewer_is_labelled_unverified_os_user(client, db, tmp_path):
     recent_record(db)
-    wrapper_run(db, tmp_path, "k")
+    wrapper_run(db, tmp_path, "k", "test rationale")
     rv = next(e for e in log(client)["events"] if e["type"] == "review")
     assert rv["actor"] == "osuser" and rv["actor_assurance"] == OS_USER_ASSURANCE
     assert "not verified" in rv["actor_assurance"]

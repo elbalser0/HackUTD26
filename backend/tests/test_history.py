@@ -277,7 +277,7 @@ def test_rationale_with_control_chars_rejected(db, tmp_path, bad):
 ])
 def test_keep_defer_cancel_append_one_review(db, tmp_path, choice, decision, intent):
     rid = open_record(db)
-    res, runner, _ = run(db, tmp_path, Script(choice))
+    res, runner, _ = run(db, tmp_path, Script(choice, "test rationale"))
     assert runner.apply_calls == []
     revs = reviews(db, rid)
     assert len(revs) == 1
@@ -309,7 +309,7 @@ def test_unverified_bypass_records_review(db, tmp_path):
 
 def test_named_reviewer_is_self_reported(db, tmp_path):
     rid = open_record(db)
-    s = Script("k")
+    s = Script("k", "test rationale")
     run(db, tmp_path, s, reviewer="Dana")
     rv = reviews(db, rid)[0]
     assert rv.actor == "Dana" and rv.actor_assurance == SELF_REPORTED
@@ -318,7 +318,7 @@ def test_named_reviewer_is_self_reported(db, tmp_path):
 
 def test_default_reviewer_is_os_user(db, tmp_path):
     rid = open_record(db)
-    run(db, tmp_path, Script("k"))
+    run(db, tmp_path, Script("k", "test rationale"))
     rv = reviews(db, rid)[0]
     assert rv.actor == "osuser" and rv.actor_assurance == OS_USER_ASSURANCE == "local-os-user (not verified)"
 
@@ -334,7 +334,7 @@ def test_reviewer_with_control_char_falls_back_to_os_user(db, tmp_path):
 
 def test_prior_decisions_displayed_on_next_run(db, tmp_path):
     open_record(db)
-    run(db, tmp_path, Script("k"), reviewer="Dana")
+    run(db, tmp_path, Script("k", "test rationale"), reviewer="Dana")
     s = Script("c")
     run(db, tmp_path, s)
     prior = [line for line in s.lines if "prior:" in line]
@@ -497,7 +497,7 @@ def test_state_sync_run_has_plan_fingerprint(db, tmp_path):
 def test_reviewer_stored_on_runs_that_do_not_apply(db, tmp_path):
     # M3
     open_record(db)
-    res, _, _ = run(db, tmp_path, Script("k"), reviewer="Dana")
+    res, _, _ = run(db, tmp_path, Script("k", "test rationale"), reviewer="Dana")
     row = db.get_apply_run(res.run_id)
     assert row["reviewer"] == "Dana" and row["reviewer_assurance"] == SELF_REPORTED
     assert row["started_at"] is None and row["rationale"] is None

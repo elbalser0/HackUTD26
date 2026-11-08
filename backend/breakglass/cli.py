@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-from . import service, wrapper
+from . import demo, service, wrapper
 from .config import BACKEND_DIR, ConfigError, load_settings
 from .db import Database
 from .models import DecisionIn, Intent, ReportIn
@@ -247,6 +247,13 @@ def cmd_reset_db(args, db: Database, settings) -> int:
     return 0
 
 
+def cmd_demo_reset(args, db: Database, settings) -> int:
+    tf = None
+    if settings.tf_dir is not None and not args.skip_cloud_check:
+        tf = Terraform(settings.tf_dir, binary=settings.terraform_bin)
+    return demo.demo_reset(db, settings, tf, yes=args.yes, check_cloud=not args.skip_cloud_check)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="breakglass", description="Break-Glass Handoff: emergency-change context for Terraform applies.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -300,6 +307,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("reset-db", help="delete all records and apply runs")
     s.add_argument("--yes", action="store_true")
     s.set_defaults(func=cmd_reset_db)
+
+    s = sub.add_parser("demo-reset", help="wipe local demo data and run a read-only preflight (never changes the cloud)")
+    s.add_argument("--yes", action="store_true", help="skip the typed confirmation")
+    s.add_argument("--skip-cloud-check", action="store_true", help="do not run the read-only refresh-only plan")
+    s.set_defaults(func=cmd_demo_reset)
     return p
 
 

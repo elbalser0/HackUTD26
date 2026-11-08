@@ -71,14 +71,15 @@ SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Da
 5. Branch on the result:
    - **Verification failed** (scan, plan JSON or match error): prints `VERIFICATION UNAVAILABLE. This is NOT a 'no conflicts' result.` Continuing requires typing `unverified-bypass` **and a rationale**.
    - **Warnings:** each shows its reason, record age, and up to 3 prior decisions. Then:
-     - keep: saves intent and prints a literal-edit suggestion; no apply.
-     - defer: no apply.
-     - cancel: no apply.
+     - keep: requires a rationale, then saves intent and prints a literal-edit suggestion; no apply.
+     - defer: requires a rationale; no apply.
+     - cancel: asks for a rationale but never requires one (cancelling is the safe default); no apply. Closed input or Ctrl+C also cancels.
+     - keep or defer without a valid rationale is **not saved**. The run is recorded as a cancel instead, and nothing is applied.
      - revert: requires typing `revert`, then a rationale. If either is missing, nothing is applied, but the record's intent is saved as `revert` ("revert-not-confirmed").
      - override: requires typing `override`, then a rationale.
    - **No warnings:** requires typing `yes`.
    - Every decision on affected records, including keep, defer and cancel, is appended as a `review` event per record. Earlier history is never overwritten (PRD R6/R10). Runs with no affected records are recorded on the run row and its `run_started` / `run_finished` events.
-   - **Known gap:** PRD §6 step 7 asks for a short rationale with every decision. Today it is required only for revert, override and bypass; keep, defer and cancel don't ask for one.
+   - Every decision carries a rationale (PRD §6 step 7). It is required for keep, defer, revert, override and bypass, and optional only for cancel.
 6. Before applying, re-hash the plan file, config and workspace. On any change it aborts (`aborted_plan_changed`).
 7. **Persist before execution (PRD R7):** in one transaction, save the review events (decision, rationale, reviewer and its assurance, plan fingerprint), set the run to `running` with `started_at`, and add a `run_started` event. If that write fails, nothing is applied and the run is `failed` ("decision could not be persisted").
 8. `terraform apply <that exact saved plan>`. A saved-plan apply doesn't prompt, so the wrapper owns confirmation. A `run_finished` event records the outcome.
@@ -114,6 +115,7 @@ breakglass decide <id> keep|revert|unsure|defer [--note TEXT]
 breakglass apply
 breakglass recheck [--refresh-json FILE --plan-json FILE --label authored-fixture|real-fixture]
 breakglass reset-db --yes
+breakglass demo-reset [--yes] [--skip-cloud-check]   # wipe demo data + read-only preflight (never changes the cloud)
 ```
 
 Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`).
@@ -169,8 +171,13 @@ Open (by design or pending the spike):
 5. The API is up: `curl http://localhost:8000/api/health`.
 
 ### Reset between rehearsals
-1. In the DigitalOcean console, remove the added 8443 rule from `break-glass-demo`, or let a confirmed `breakglass apply` → revert remove it.
-2. `breakglass recheck` resolves or keeps records honestly, or `breakglass reset-db --yes` wipes demo data.
+1. Run `breakglass demo-reset` on the operator machine with the token loaded. It does four things:
+   - asks you to type `reset`, then deletes local records, history and apply runs;
+   - checks the Terraform folder, token presence (never shown), `BG_ADMIN_TOKEN` and the API;
+   - runs a **read-only** refresh-only plan, which is never applied and never saved as a record;
+   - exits with `0` when the firewall is clean, `2` with a list if drift is left over (e.g. the 8443 rule), and `1` if it could not verify. A failed check is never reported as clean.
+2. If it reports drift, remove the leftover rule in the DigitalOcean console (a human action) and run `breakglass demo-reset --yes` again until it says clean.
+3. To keep history instead of wiping it, use `breakglass recheck`. It resolves records only when the live firewall, state and config agree.
 
 ### Real spike / provisioning — EACH STEP NEEDS TEAM APPROVAL
 Runs on **Daniel's machine** (the single operator: it holds the Terraform state, runs the backend and the UI).
