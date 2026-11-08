@@ -11,8 +11,8 @@ why, and when the next apply would reverse it, stops and shows that reason so a 
 
 ## One-time setup: a week of history (your call; writes to Tiger)
 The live flow only creates a few records, so the admin Overview, chart and All records would look empty. This adds a
-week of **authored** history so they have something to show. It is labelled (`DEMO DATA · demo-authored ·
-authored-fixture` in the UI), lives in its own `demo-authored` environment, and never mixes with live records.
+week of **authored** history so they have something to show. It is labelled (`DEMO DATA · demo-history-authored ·
+authored-fixture` in the UI), lives in its own `demo-history-authored` environment, and never mixes with live records.
 
 ```
 set -a && . ./.env && set +a
@@ -69,7 +69,7 @@ is configured, including this seeded history and your real records.
 | You land on the employee records page instead of Overview | That account is not in `BG_ADMIN_EMAILS` (server says not an admin). Sign in with an admin account. |
 | Last scan is amber | There has never been a scan, or the last one failed. Run the baseline scan again. (An old but successful scan is not amber; it just shows its age.) Last apply amber means an unknown or failed outcome. |
 | "address already in use" on 8000 | An old API is running: `lsof -nP -iTCP:8000 -sTCP:LISTEN`, then `kill <pid>`. |
-| Need to restore the week | Do not re-seed over existing data (it refuses). The seeded records are in `demo-authored`. |
+| Need to restore the week | Do not re-seed over existing data (it refuses). The seeded records are in `demo-history-authored`. |
 
 ## Rules for the team
 - Terraform, `argus` and the API all run on **one operator machine** (it holds the Terraform state). Never apply this config from a second machine.

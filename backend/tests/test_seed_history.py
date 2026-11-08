@@ -163,3 +163,15 @@ def test_cli_with_yes_seeds_and_prints_a_summary(db_path, capsys):
     finally:
         d.close()
     assert cli.main(["seed-history", "--yes"]) == 1  # already seeded
+
+
+def test_refuses_before_writing_anything_if_the_environment_already_has_a_record(db):
+    # e.g. a seed-demo record, or the leftovers of a crashed run: the seed must not stop halfway.
+    from breakglass import service
+    from breakglass.seed_history import _plan
+    service.ingest_refresh_plan(db, ENV, _plan("digitalocean_firewall.web", ["8080"], ["8443"]),
+                                evidence_source="authored-fixture", now=NOW)
+    before = (len(db.list_records(environment=ENV)), len(db.list_all_events()))
+    with pytest.raises(seed_history.SeedHistoryRefused):
+        _seed(db)
+    assert (len(db.list_records(environment=ENV)), len(db.list_all_events())) == before

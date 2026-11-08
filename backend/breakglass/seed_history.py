@@ -126,6 +126,13 @@ def seed_history(db: Database, environment: str, *, now: datetime | None = None)
             "environment so it can never merge into live records")
     if any(MARKER in (s["detail"] or "") for s in db.list_scans() if s["environment"] == environment):
         raise SeedHistoryRefused("authored history is already seeded here; refusing to duplicate it")
+    # The marker scan is written last, so a crashed run leaves none. Check before the first write that
+    # nothing else (seed-demo, an earlier partial run, a test record) already lives in this environment:
+    # a colliding detection would otherwise abort the seed halfway through.
+    if db.list_records(environment=environment):
+        raise SeedHistoryRefused(
+            f"environment {environment!r} already has records; refusing to seed on top of them "
+            "(it could stop halfway and leave partial history)")
 
     now = now or utcnow()
     day = lambda d, h, m=0: now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=d) + timedelta(hours=h, minutes=m)  # noqa: E731

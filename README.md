@@ -4,6 +4,30 @@ HackUTD 2026 project for the NMC² challenge. During an incident an engineer may
 
 The [PRD](<docs/Break-Glass Handoff — PRD.md>) is the source of truth for scope and acceptance. It records requirements, **not** implemented or verified results. This is an independent hackathon project, not affiliated with or endorsed by NMC².
 
+## The `argus` CLI
+
+The CLI is how Argus finds, explains and guards manual changes. From a checkout run it as `./argus <command>`, or as `argus <command>` after `pip install -e`. Add `--help` to any command for its options.
+
+**The flow:** `scan` finds manual changes and asks why they were made. `apply` warns before a Terraform apply would undo one. `recheck` resolves a record once live, state and config provably agree.
+
+| Command | What it does |
+|---|---|
+| `scan` | Runs a refresh-only Terraform plan (never applied) to find manual changes, then asks "why was this needed?" for each. `--no-prompt` skips the question. `--from-json FILE --label authored-fixture\|real-fixture` reads a saved plan instead of running Terraform and keeps that data in a separate environment. |
+| `list` | Lists records (open by default). `--all` shows everything, `--resolved` only resolved ones. |
+| `show ID` | Prints one record as JSON. |
+| `report ID` | Records what changed and why (self-reported): `--reason`, `--reporter`, `--intent keep\|revert\|unsure\|defer`. |
+| `decide ID` | Saves an intent without applying or resolving anything: `--note`, `--reviewer`. |
+| `apply` | Plans, warns about any emergency change the apply would reverse, and applies only after you confirm. `--reviewer` sets the recorded name (default: your OS user). |
+| `recheck` | Resolves a record only when a fresh refresh-only plan and a fresh normal plan both agree with live. Any failed or unclear check keeps it open. |
+| `migrate-schema` | Creates or upgrades the Tiger Cloud (PostgreSQL) schema; needs a `BG_DATABASE_URL` that can change the schema. |
+| `import-sqlite --source FILE` | Copies a SQLite history into the configured PostgreSQL (`--dry-run` to validate only). |
+| `seed-demo` | Loads one authored demo record (`--with-report` adds a sample reason). |
+| `seed-history` | Loads a week of authored demo history. Needs `--yes` to write; refuses to run twice. |
+| `reset-db` | **Destructive.** Deletes all records and apply runs in the configured database. Needs `--yes`. |
+| `demo-reset` | **Destructive.** Wipes local demo data and runs a read-only cloud preflight. |
+
+With `BG_DATABASE_URL` set, commands use that PostgreSQL database; otherwise they use the local SQLite file. **Never run `reset-db` or `demo-reset` against Tiger.**
+
 ## What exists
 
 | Piece | Where | State |
