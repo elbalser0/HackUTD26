@@ -21,7 +21,7 @@ import { BUCKETS, bucketOf } from "../records";
 import type { Bucket } from "../records";
 import { useAsync } from "../useAsync";
 import { ErrorState, Loading, Notice } from "./States";
-import { Freshness } from "./RecordList";
+import { Freshness } from "./Freshness";
 import { Palette } from "./Palette";
 import { usePalette } from "../paletteContext";
 
