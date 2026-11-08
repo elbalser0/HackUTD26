@@ -69,7 +69,7 @@ def test_health_shape(client):
     assert r.status_code == 200
     b = r.json()
     assert set(b) == {"status", "version", "db", "environment", "terraform_dir_configured", "time",
-                      "last_scan_at", "last_scan_status"}
+                      "last_scan_at", "last_scan_status", "auth"}
     assert b["status"] == "ok" and b["db"] == "ok"
     assert isinstance(b["terraform_dir_configured"], bool)
     assert TZ_RE.search(b["time"])

@@ -263,12 +263,16 @@ def event_out(row) -> "EventOut":
 
 
 def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = None,
-           source: str = "web") -> RecordOut:
+           source: str = "web", account: str | None = None, account_name: str | None = None,
+           assurance: str = "self-reported") -> RecordOut:
+    """`account` is a verified sign-in (email) when present. The typed reporter name
+    stays the self-reported name; without one, the account's display name is used."""
     now_s = ts(now or utcnow())
     with db.tx() as conn:
         _require_open(db, record_id)
         fields: dict[str, Any] = {
-            "reporter": body.reporter.strip() if body.reporter and body.reporter.strip() else None,
+            "reporter": (body.reporter.strip() if body.reporter and body.reporter.strip()
+                         else (account_name or account)),
             "reason": body.reason.strip(),
             "reported_at": now_s,
         }
@@ -280,14 +284,14 @@ def report(db: Database, record_id: str, body: ReportIn, now: datetime | None = 
         row = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()
         # Append-only history: a later report never erases an earlier one (PRD R6/R10).
         _event(db, conn, environment=row["environment"], kind="report", record_id=record_id, run_id=None,
-               actor=fields["reporter"], assurance="self-reported", now_s=now_s,
+               actor=account or fields["reporter"], assurance=assurance, now_s=now_s,
                data={"reason": fields["reason"], "intent": body.intent.value if body.intent else None,
-                     "source": source})
+                     "source": source, "reporter_name": fields["reporter"]})
     return record_out(db.get_record(record_id))
 
 
 def decide(db: Database, record_id: str, body: DecisionIn, now: datetime | None = None,
-           source: str = "web", actor: str | None = None) -> RecordOut:
+           source: str = "web", actor: str | None = None, assurance: str = "self-reported") -> RecordOut:
     """Store intent. Never resolves, never applies."""
     now_s = ts(now or utcnow())
     with db.tx() as conn:
@@ -300,7 +304,7 @@ def decide(db: Database, record_id: str, body: DecisionIn, now: datetime | None 
         }, conn)
         env = conn.execute("SELECT environment FROM records WHERE id = ?", (record_id,)).fetchone()["environment"]
         _event(db, conn, environment=env, kind="decision", record_id=record_id, run_id=None,
-               actor=actor, assurance="self-reported", now_s=now_s,
+               actor=actor, assurance=assurance, now_s=now_s,
                data={"intent": body.intent.value, "note": note, "source": source})
     return record_out(db.get_record(record_id))
 

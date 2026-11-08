@@ -23,9 +23,11 @@ from .models import (
 )
 
 LIMITATIONS = [
-    "Actors are not verified identities: reporters are self-reported, and a wrapper reviewer is either "
-    "self-reported or the local OS user (not verified).",
-    "Admin access uses one shared token: it shows that an admin read the log, not which admin.",
+    "Only web actions made while signed in carry a verified account (Google sign-in); everything else is "
+    "self-reported, and a wrapper reviewer is either self-reported or the local OS user (not verified). "
+    "A verified account shows who submitted an explanation, not who made the console change.",
+    "Admin access is a Firebase sign-in from an allowlisted email, or the shared fallback token; the shared "
+    "token shows that an admin read the log, not which admin.",
     "A run with no recorded completion is shown as unknown: it may have been interrupted, crashed, or still be "
     "running. Unknown is not the same as failed, and never means success.",
     "Records and runs from before the events table existed show only their latest stored values and are labelled "

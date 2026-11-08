@@ -19,7 +19,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, admin, service
+from . import __version__, auth, admin, service
 from .config import load_settings
 from .db import Database
 from .models import (
@@ -71,9 +71,15 @@ def apply_run_out(row) -> ApplyRunOut:
 
 
 def create_app(db: Database | None = None, allowed_hosts: list[str] | None = None,
-               admin_token: str | None = None) -> FastAPI:
+               admin_token: str | None = None, firebase_project_id: str | None = None,
+               admin_emails: list[str] | None = None, verifier: "auth.Verifier | None" = None) -> FastAPI:
     settings = load_settings()
     token = admin_token if admin_token is not None else settings.admin_token
+    project = (firebase_project_id if firebase_project_id is not None else settings.firebase_project_id) or None
+    admins = {e.strip().lower() for e in (admin_emails if admin_emails is not None else settings.admin_emails)
+              if e and e.strip()}
+    # Firebase is on only when a project id is configured (an injected verifier alone does not enable it).
+    verify = (verifier or auth.firebase_verifier(project)) if project else None
     app = FastAPI(title="Break-Glass Handoff API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
     # Host allowlist blocks DNS-rebinding pages from reaching this unauthenticated local API.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or list(settings.allowed_hosts))
@@ -119,14 +125,42 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
         log.exception("unhandled error")  # details to server log only, never to the client
         return _err(500, "internal", "internal error")
 
+    def signed_in(request: Request) -> "auth.Identity | None":
+        """Verified Firebase identity for web writes. None when Firebase is not configured
+        (writes stay open, as before). Bearer header only, never a URL parameter."""
+        if verify is None:
+            return None
+        supplied = auth.bearer_token(request.headers.get("authorization"))
+        if supplied is None:
+            raise HTTPException(401, "sign-in required", headers={"WWW-Authenticate": "Bearer"})
+        try:
+            return auth.identity_from(supplied, verify)
+        except auth.InvalidToken:
+            raise HTTPException(401, "sign-in invalid or expired", headers={"WWW-Authenticate": "Bearer"}) from None
+        except auth.NotAllowed:
+            raise HTTPException(403, "a verified email is required") from None
+
     def require_admin(request: Request) -> None:
-        """Server-side gate for /api/admin/*. Fails closed when no token is configured."""
-        if not token:
+        """Server-side gate for /api/admin/*: the shared token (offline fallback) OR a
+        Firebase sign-in whose verified email is allowlisted. Fails closed."""
+        firebase_admin = verify is not None and bool(admins)
+        if not token and not firebase_admin:
             raise HTTPException(403, "admin access is not configured on this server")
-        scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
-        # Bearer header only: a token in the URL would land in logs and browser history.
-        if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), token.encode()):
+        supplied = auth.bearer_token(request.headers.get("authorization"))
+        if supplied is None:
             raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"})
+        if auth.is_shared_admin_token(supplied, token):
+            return
+        if verify is None:
+            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"})
+        try:
+            who = auth.identity_from(supplied, verify)
+        except auth.InvalidToken:
+            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"}) from None
+        except auth.NotAllowed:
+            raise HTTPException(403, "a verified email is required") from None
+        if who.email not in admins:
+            raise HTTPException(403, "this account is not an admin")
 
     def _aware(name: str, raw: str | None) -> datetime | None:
         if raw is None:
@@ -167,7 +201,10 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
             db_status, status, code = "error", "degraded", 503
         body = HealthOut(status=status, version=__version__, db=db_status, environment=settings.environment,
                          terraform_dir_configured=settings.tf_dir is not None, time=utcnow(),
-                         last_scan_at=None, last_scan_status=None)
+                         last_scan_at=None, last_scan_status=None,
+                         auth={"firebase_project_id": project, "writes_require_sign_in": verify is not None,
+                               "admin_via_firebase": verify is not None and bool(admins),
+                               "admin_via_shared_token": bool(token)})
         if last is not None:
             try:
                 body = body.model_copy(update={
@@ -190,12 +227,19 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
         return service.record_out(row)
 
     @app.post("/api/records/{record_id}/report", response_model=RecordOut)
-    def post_report(record_id: str, body: ReportIn):
-        return service.report(database(), record_id, body)
+    def post_report(record_id: str, body: ReportIn, request: Request):
+        who = signed_in(request)
+        if who is None:
+            return service.report(database(), record_id, body)
+        return service.report(database(), record_id, body, account=who.email, account_name=who.name,
+                              assurance=auth.VERIFIED_ASSURANCE)
 
     @app.post("/api/records/{record_id}/decision", response_model=RecordOut)
-    def post_decision(record_id: str, body: DecisionIn):
-        return service.decide(database(), record_id, body)
+    def post_decision(record_id: str, body: DecisionIn, request: Request):
+        who = signed_in(request)
+        if who is None:
+            return service.decide(database(), record_id, body)
+        return service.decide(database(), record_id, body, actor=who.email, assurance=auth.VERIFIED_ASSURANCE)
 
     @app.get("/api/records/{record_id}/events", response_model=EventList)
     def record_events(record_id: str):

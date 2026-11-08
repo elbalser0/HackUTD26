@@ -35,6 +35,10 @@ class Settings:
     terraform_bin: str
     # Shared admin bearer token for /api/admin/*. Never logged or echoed; unset or blank = admin API disabled.
     admin_token: str | None = field(default=None, repr=False)
+    # Firebase (Google) sign-in. The project id is a PUBLIC identifier, not a secret.
+    # Set = web writes require sign-in; admin log also accepts listed admin emails.
+    firebase_project_id: str | None = None
+    admin_emails: tuple[str, ...] = ()
 
 
 def _resolve_tf_dir(raw: str | None) -> Path | None:
@@ -64,4 +68,7 @@ def load_settings() -> Settings:
         # Absolute path so Windows never runs a terraform.exe found in the current directory.
         terraform_bin=shutil.which(os.environ.get("BG_TERRAFORM_BIN", "terraform")) or "terraform",
         admin_token=os.environ.get("BG_ADMIN_TOKEN") or None,
+        firebase_project_id=(os.environ.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
+        admin_emails=tuple(e.strip().lower() for e in os.environ.get("BG_ADMIN_EMAILS", "").split(",")
+                           if e.strip()),
     )

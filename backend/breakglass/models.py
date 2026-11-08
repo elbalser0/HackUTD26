@@ -312,6 +312,7 @@ class HealthOut(BaseModel):
     time: datetime
     last_scan_at: datetime | None = None    # most recent scan of this environment, if any
     last_scan_status: str | None = None     # "ok" | "failed" | null when never scanned
+    auth: dict | None = None                # sign-in configuration (no secrets)
 
 
 # --------------------------------------------------------------------------

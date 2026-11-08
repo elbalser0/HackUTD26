@@ -15,7 +15,7 @@ uvicorn breakglass.api:app --port 8000
 
 - **Base URL:** `http://localhost:8000` (frontend: `VITE_API_BASE_URL=http://localhost:8000`, already in `.env.example`).
 - **CORS:** allows `http://localhost:5173` and `http://127.0.0.1:5173` (Vite dev). Override with `BG_CORS_ORIGINS`.
-- **Auth:** none. Local demo only. Bind to localhost; do not expose publicly.
+- **Auth:** optional Firebase (Google) sign-in; see [Sign-in](#sign-in-firebase). Without it, engineer endpoints are open. Local demo only: bind to localhost and do not expose publicly.
 - **Host allowlist:** requests must use host `localhost`, `127.0.0.1` or `[::1]` (otherwise `400`). This blocks DNS-rebinding pages. Override with `BG_ALLOWED_HOSTS`.
 - **Content type:** JSON, UTF-8.
 
@@ -221,14 +221,31 @@ All errors use this envelope:
 | 422 | `validation_error` (message summarizes the failing fields) |
 | 500 | `internal` (no internal details are returned) |
 
+## Sign-in (Firebase)
+
+Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not a secret). The browser signs in with the Firebase JS SDK (Google provider) and sends the Firebase **ID token** on writes as `Authorization: Bearer <id token>`. Never put it in a URL.
+
+| Endpoint | Firebase not configured | Firebase configured |
+|---|---|---|
+| `GET` records, apply runs, events, health | open | open (localhost only) |
+| `POST /api/records/{id}/report`, `/decision` | open (actor self-reported) | **sign-in required**: `401` without or with an invalid/expired token, `403` if the email is unverified |
+| `/api/admin/*` | shared `BG_ADMIN_TOKEN` | shared token **or** a Firebase sign-in whose verified email is in `BG_ADMIN_EMAILS`. A signed-in non-admin gets `403` |
+
+- **Signed-in writes:** the event's `actor` is the account email, and `actor_assurance` is `"google-account (verified sign-in)"`.
+  - A typed `reporter` is kept as the self-reported display name, saved as `data.reporter_name`. Without one, the account's display name is used.
+- **What it proves:** who submitted the explanation, **not** who made the console change.
+- **Health:** `GET /api/health` includes `auth: {firebase_project_id, writes_require_sign_in, admin_via_firebase, admin_via_shared_token}`. No secrets are included.
+- **Tokens:** the server verifies the token's signature, expiry, audience (the project id) and issuer with Google's public keys. Token values are never echoed in errors.
+
 ## Admin log (R9)
 
 Read-only views for an authorized operations lead. They are derived from the append-only `events`, plus `records` (detection and resolution times) and `apply_runs` (to surface runs that never recorded a completion, and runs from before the events table existed). Nothing is invented.
 
-**Authorization (server-side).** Set `BG_ADMIN_TOKEN` on the server and send `Authorization: Bearer <token>`. A token in the URL is never accepted.
-- No token configured (unset or blank): `403 forbidden` (fails closed).
-- Missing or wrong credentials: `401 unauthorized` with `WWW-Authenticate: Bearer`.
-- It is one **shared** token: it shows that an admin read the log, not which admin. The older `/api/records` and `/api/apply-runs` endpoints are still unauthenticated.
+**Authorization (server-side).** Send `Authorization: Bearer <credential>`, where the credential is either a Firebase ID token from an admin email (`BG_ADMIN_EMAILS`, case-insensitive, verified email required) or the shared `BG_ADMIN_TOKEN`, kept as an offline fallback. A credential in the URL is never accepted.
+- Neither configured: `403 forbidden` (fails closed). A Firebase project with an empty admin list grants admin to no one.
+- Missing or invalid credentials: `401 unauthorized` with `WWW-Authenticate: Bearer`.
+- A valid sign-in that isn't an admin, or has an unverified email: `403 forbidden`.
+- The shared token shows that *an* admin read the log, not which admin. The older `/api/records` and `/api/apply-runs` reads stay open.
 
 ### AdminEvent
 ```json
@@ -237,7 +254,7 @@ Read-only views for an authorized operations lead. They are derived from the app
   "actor": "Dana", "actor_assurance": "self-reported", "outcome": null,
   "plan_fingerprint": "sha256:...", "detail": "decision: revert — webhook fixed upstream" }
 ```
-`type`: `change_detected` · `explained` · `decision` · `review` · `run_started` · `run_finished` · `run_unfinished` · `resolved`. `actor_assurance` is `self-reported`, `local-os-user (not verified)` or `system`; it is never verified identity. `outcome` is set on `run_finished` and `run_unfinished` only. `run_unfinished` is derived for a run that has no recorded completion, and its outcome is **`unknown`**, never success. `plan_fingerprint` on `review` and `run_started` is the exact plan that was reviewed and then executed.
+`type`: `change_detected` · `explained` · `decision` · `review` · `run_started` · `run_finished` · `run_unfinished` · `resolved`. `actor_assurance` is `self-reported`, `local-os-user (not verified)`, `system`, or `google-account (verified sign-in)` for web actions made while signed in. The last one verifies who submitted an action, never who made the console change. `outcome` is set on `run_finished` and `run_unfinished` only. `run_unfinished` is derived for a run that has no recorded completion, and its outcome is **`unknown`**, never success. `plan_fingerprint` on `review` and `run_started` is the exact plan that was reviewed and then executed.
 
 ### `GET /api/admin/log`
 Newest first. Filters (all optional, AND): `engineer` (case-insensitive exact match on the event actor), `resource` (exact address), `since` / `until` (ISO 8601 **with timezone**, inclusive), `outcome` (a terminal run outcome or `unknown`; selects run results only), `limit` (1-500, default 100). Returns `{events, total_matching, limitations}`. Invalid filters are `422`.
