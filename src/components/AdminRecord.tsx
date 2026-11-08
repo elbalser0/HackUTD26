@@ -19,7 +19,7 @@ import { baselineText, CHECK_LABEL, demoTag, formatDetected, observedText } from
 import { humanize } from "../overview";
 import { useAsync } from "../useAsync";
 import type { Async } from "../useAsync";
-import { ErrorState, Loading, Notice } from "./States";
+import { ErrorState, Loading } from "./States";
 
 export function AdminRecord({ id }: { id: string }) {
   const rec = useAsync(() => api.getRecord(id), [id]);
@@ -101,16 +101,6 @@ export function AdminRecord({ id }: { id: string }) {
         </section>
       </div>
 
-      {tl.s.state === "ok" && tl.s.data.limitations.length > 0 && (
-        <Notice tone="info">
-          <strong>What this view cannot tell you</strong>
-          <ul>
-            {tl.s.data.limitations.map((l, i) => (
-              <li key={i}>{l}</li>
-            ))}
-          </ul>
-        </Notice>
-      )}
     </>
   );
 }

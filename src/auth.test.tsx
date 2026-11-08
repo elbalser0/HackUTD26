@@ -12,7 +12,7 @@ import {
 import "@testing-library/jest-dom/vitest";
 import App from "./App";
 import { ApiError, api, setAdapter, setTokenProvider } from "./api";
-import type { Adapter, AdminFilters, EmergencyRecord, Health } from "./api";
+import type { Adapter, EmergencyRecord, Health } from "./api";
 import { setAuthClient } from "./auth";
 import type { AuthClient, AuthUser } from "./auth";
 
@@ -265,34 +265,6 @@ test("sign-in errors are explained (blocked popup)", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent(/blocked the google popup/i);
 });
 
-test("offline admin access: the shared-token admin page is reachable without Google", async () => {
-  setAuthClient(fakeAuth());
-  const adminLog = vi.fn(async (_t: string, _f: AdminFilters) => ({ events: [], totalMatching: 0, limitations: [] }));
-  setAdapter(stub({ adminLog }));
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: /admin offline access/i }));
-  fireEvent.change(await screen.findByLabelText(/admin token/i), { target: { value: "shared-secret" } });
-  fireEvent.click(screen.getByRole("button", { name: /unlock/i }));
-  await waitFor(() => expect(adminLog).toHaveBeenCalled());
-  expect(adminLog.mock.calls[0][0]).toBe("shared-secret");
-  expect(screen.getByText(/not signed in/i)).toBeInTheDocument();
-});
-
-test("list: hint to sign in when the server requires it and nobody is signed in (offline mode)", async () => {
-  setAuthClient(fakeAuth());
-  setAdapter(
-    stub({ listRecords: async () => ({ records: [rec()], health: health(true) }) }),
-  );
-  render(<App />);
-  fireEvent.click(screen.getByRole("button", { name: /admin offline access/i }));
-  window.location.hash = "#/";
-  expect(
-    await screen.findByText(/sign in with google to add explanations/i),
-  ).toBeInTheDocument();
-});
-
-// ---- report form ----------------------------------------------------------
-
 test("report form: says which verified account will save it", async () => {
   setAuthClient(fakeAuth(DANA));
   setAdapter(stub());
@@ -457,68 +429,18 @@ test("the app's wiring fetches a NEW token for every write (never caches one)", 
 
 // ---- admin page ---------------------------------------------------------------
 
-test("admin: continue as the signed-in Google account, fresh token per call", async () => {
-  const auth = fakeAuth(DANA);
-  setAuthClient(auth);
-  const adminLog = vi.fn(async (_t: string, _f: AdminFilters) => ({ events: [], totalMatching: 0, limitations: [] }));
-  setAdapter(stub({ adminLog }));
-  window.location.hash = "#/admin";
-  render(<App />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: /continue as dana@example\.com/i }),
-  );
-  await waitFor(() => expect(adminLog).toHaveBeenCalled());
-  expect(adminLog.mock.calls[0][0]).toMatch(/^idtok-\d+$/);
-  expect(auth.getIdToken).toHaveBeenCalled();
-});
-
-test("admin: a signed-in non-admin is told so (not 'not configured')", async () => {
+test("admin: a signed-in non-admin at #/admin is sent to the records page, with no token screen", async () => {
   setAuthClient(fakeAuth(DANA));
-  setAdapter(
-    stub({
-      adminLog: async () => {
-        throw new ApiError("this account is not an admin", 403, "not_admin");
-      },
-    }),
-  );
+  setAdapter(stub());
   window.location.hash = "#/admin";
   render(<App />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: /continue as dana@example\.com/i }),
-  );
-  const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent(/not an admin/i);
-  expect(alert).not.toHaveTextContent(/not configured/i);
+  await waitFor(() => expect(window.location.hash).toBe("#/"));
+  expect(screen.queryByLabelText(/admin token/i)).toBeNull();
 });
 
-test("admin: shared-token fallback is still offered and works", async () => {
-  setAuthClient(fakeAuth(DANA));
-  const adminLog = vi.fn(async (_t: string, _f: AdminFilters) => ({ events: [], totalMatching: 0, limitations: [] }));
-  setAdapter(stub({ adminLog }));
-  window.location.hash = "#/admin";
+test("the sign-in page no longer offers shared-token offline access", () => {
+  setAuthClient(fakeAuth());
+  setAdapter(stub());
   render(<App />);
-  expect(await screen.findByRole("heading", { name: /offline fallback/i })).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText(/admin token/i), {
-    target: { value: "shared-secret" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /unlock/i }));
-  await waitFor(() => expect(adminLog).toHaveBeenCalled());
-  expect(adminLog.mock.calls[0][0]).toBe("shared-secret");
-});
-
-test("admin: signing out leaves the admin view for the sign-in page", async () => {
-  const auth = fakeAuth(DANA);
-  setAuthClient(auth);
-  const adminLog = vi.fn(async (_t: string, _f: AdminFilters) => ({ events: [], totalMatching: 0, limitations: [] }));
-  setAdapter(stub({ adminLog }));
-  window.location.hash = "#/admin";
-  render(<App />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: /continue as dana@example.com/i }),
-  );
-  await waitFor(() => expect(adminLog).toHaveBeenCalled());
-  openAccountMenu();
-  fireEvent.click(screen.getByRole("menuitem", { name: /^sign out$/i }));
-  expect(await screen.findByRole("button", { name: /sign in with google/i })).toBeInTheDocument();
-  expect(screen.queryByText(/admin log/i, { selector: ".eyebrow" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /offline access/i })).toBeNull();
 });
