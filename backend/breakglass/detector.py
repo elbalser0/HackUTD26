@@ -65,9 +65,20 @@ def _canon(value: Any) -> Any:
     return value
 
 
+def _empty_is_none(value: Any) -> Any:
+    """null, [] and {} compare equal. The provider reports an unset collection as null in older state and as an
+    empty collection live (seen for a firewall's droplet_ids and tags in the 2026-11-07 spike); Terraform treats
+    them the same, so this is normalization, not drift. Deliberately narrow: only empty collections. A string,
+    number or boolean never equals null, and [] never equals a non-empty list (a detach is still drift)."""
+    return None if value is None or value == [] or value == {} else value
+
+
 def changed_attrs(before: dict, after: dict, ignore: frozenset[str] = _IGNORED_ATTRS) -> list[str]:
     keys = (set(before) | set(after)) - ignore
-    return sorted(k for k in keys if _canon(before.get(k)) != _canon(after.get(k)))
+    return sorted(
+        k for k in keys
+        if _empty_is_none(_canon(before.get(k))) != _empty_is_none(_canon(after.get(k)))
+    )
 
 
 def _valid_actions(actions: Any) -> bool:

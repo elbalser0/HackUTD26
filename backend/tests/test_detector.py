@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from breakglass.detector import detect, is_refresh_only_plan
 from breakglass.models import ChangeKind, FirewallRule
 
@@ -103,3 +105,33 @@ def test_added_and_removed_observations():
 def test_is_refresh_only_plan():
     assert not is_refresh_only_plan(load("plan_reverts_8443.json"))
     assert not is_refresh_only_plan("x")
+
+
+# ---- null vs empty collection is a provider normalization, not drift (real spike finding) ----------------------
+
+from breakglass.detector import changed_attrs  # noqa: E402
+
+
+@pytest.mark.parametrize("before,after", [
+    ({"tags": None}, {"tags": []}),
+    ({"tags": []}, {"tags": None}),
+    ({"droplet_ids": None}, {"droplet_ids": []}),
+    ({"x": None}, {"x": {}}),
+    ({}, {"tags": []}),            # key absent on one side
+    ({"tags": []}, {"tags": []}),
+], ids=["null->[]", "[]->null", "droplet_ids", "null->{}", "absent->[]", "[]==[]"])
+def test_null_and_empty_collection_are_not_drift(before, after):
+    assert changed_attrs(before, after) == []
+
+
+@pytest.mark.parametrize("before,after,attr", [
+    ({"tags": []}, {"tags": ["prod"]}, "tags"),            # a real tag appeared
+    ({"tags": None}, {"tags": ["prod"]}, "tags"),
+    ({"droplet_ids": [1]}, {"droplet_ids": []}, "droplet_ids"),  # firewall was detached
+    ({"droplet_ids": [1]}, {"droplet_ids": None}, "droplet_ids"),
+    ({"name": ""}, {"name": None}, "name"),                 # strings are NOT normalized
+    ({"n": 0}, {"n": None}, "n"),                           # neither are numbers
+    ({"flag": False}, {"flag": None}, "flag"),              # nor booleans
+], ids=["tag-added", "null->tag", "detached", "detached-null", "empty-string", "zero", "false"])
+def test_real_changes_are_still_drift(before, after, attr):
+    assert changed_attrs(before, after) == [attr]

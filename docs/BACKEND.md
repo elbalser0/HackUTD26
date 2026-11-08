@@ -15,12 +15,15 @@ Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.m
 | Verified resolution (`recheck`) | Done, tested on authored fixtures |
 | Admin log + record timeline (R9), bearer-token auth | Done, tested on authored data (`tests/test_admin.py`). Reads `events`; see API.md for limits |
 | Demo Terraform (`break-glass-infra/`) | Firewall `digitalocean_firewall.demo` ("break-glass-demo") **applied** from Daniel's machine; not attached to the droplet (`attach_firewall = false`) |
-| **Real Terraform spike** | **PARTIAL.** Real `plan` succeeded (token scopes OK). Detection of a console edit not yet exercised; runs on Daniel's machine (the operator) |
+| **Real Terraform spike** | **MOSTLY DONE (2026-11-07).** Verified on real Terraform and DigitalOcean: detection of a console edit, direction of `before`/`after`, matcher reversal, wrapper pause (cancel, keep), UI and admin log on live data. A real `recheck` resolved the record (`verified_aligned`) after the null/empty fix. Not yet run for real: a confirmed revert/override apply and the keep-path state sync |
 
 ### Evidence: real vs. authored
-- Every fixture in `backend/tests/fixtures/authored/` was **hand-written**. Its shape follows Terraform's documented plan JSON format but has not been checked against real output.
-- Key hypothesis still unverified: in a refresh-only plan's `resource_drift[]`, `change.before` is the prior **state** and `change.after` is the **refreshed live** value. In a normal plan's `resource_changes[]`, `change.before` is current (refreshed) and `change.after` is config. The test `test_authored_fixture_direction_baseline_8080_observed_8443` encodes this. If the real capture shows otherwise, flip the detector and the fixtures together.
-- `backend/tests/fixtures/real/` will hold sanitized real captures after the spike. Until then it is empty.
+- Fixtures in `backend/tests/fixtures/authored/` were **hand-written** from Terraform's documented plan JSON format.
+- `backend/tests/fixtures/real/` holds sanitized captures from the real spike (see its README): `refresh_noise_only`, `refresh_added_8443`, `plan_reverts_8443`, `plan_no_changes`. `tests/test_real_replay.py` replays them.
+- Established on real output: in a refresh-only plan's `resource_drift[]`, `change.before` is the prior **state** and `change.after` is the **live** value, and a refresh-only plan has no `resource_changes` key. In a normal plan, `before` is the refreshed live value and `after` is config; the real plan reverses a console-added rule as an in-place `update`. Every rule carries `action = "allow"`.
+- Finding: the provider reports `droplet_ids` and `tags` as `null` in older state and `[]` live. That used to be reported as unsupported drift, which made `recheck` refuse to resolve any record for the resource. Null and empty collections now compare equal (`detector._empty_is_none`); a real change (a tag added, a droplet detached, a string, number or boolean) still counts.
+- A real `recheck` closed the record once both fresh plans agreed (R11).
+- Still unseen on real output: a drift-free refresh-only plan (so the "missing `resource_drift` means no drift" assumption, I2, is unchecked), the keep-path empty-saved-plan state sync, and a confirmed revert/override apply.
 
 ## Architecture
 
@@ -153,7 +156,7 @@ Verified OK by the reviewer:
 - Resolution requires both checks.
 
 Open (by design or pending the spike):
-- A missing `resource_drift` key is treated as "no drift" (I2). Revisit once the real plan JSON is captured.
+- A missing `resource_drift` key is treated as "no drift" (I2). Still unchecked: the real captures always had `resource_drift` present because of the provider noise.
 - The API is unauthenticated, local only.
 
 ## Runbooks
@@ -188,4 +191,10 @@ On Daniel's machine: set `attach_firewall = false` (if it was attached), apply, 
   - `terraform plan` on `break-glass-infra` succeeded. The token scopes are sufficient.
   - Real output showed `action = "allow"` on every rule, which is now part of rule identity.
   - `apply` was refused with `409 duplicate name`: Daniel had already applied the same firewall from his machine. That confirmed the one-state-owner rule, so Daniel's machine is the operator. Nothing was created from Samuel's machine.
-- Refresh-only detection of a console edit: **not yet exercised.**
+- 2026-11-07, real spike on Daniel's machine (no `terraform apply` was run; the wrapper only ever took cancel or keep):
+  - Baseline `breakglass scan`: 0 new, plus the `droplet_ids`/`tags` null-versus-empty noise reported as NOT CHECKED.
+  - After adding tcp/8443 in the console: `scan` recorded one `added` record. The real normal plan removes it; the matcher flags the reversal.
+  - `breakglass apply` (stdin closed, so cancel): paused with "No reason recorded", outcome `cancelled`. After a demo reason was added: showed the reason, answered keep, outcome `kept`. The 8443 rule stayed live both times.
+  - API and web UI showed the live record and runs; the admin log showed the chain for two actors with the reviewed plan fingerprint.
+  - After the rule was deleted in the console, `breakglass recheck` left the record open as `unsupported` because of the noise. Fixed in the detector and covered by `test_recheck_resolves_after_rule_removed_despite_provider_noise`.
+  - Re-running `breakglass recheck` with the fix: `resolved (verified aligned)`. The record's history (change, cancelled and kept runs, explanation, keep review, resolution) was still there afterwards, with no gaps in the admin timeline.
