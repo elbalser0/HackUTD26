@@ -145,6 +145,18 @@ test("configured and signed out: a full sign-in page, and no app data is loaded"
   expect(listRecords).not.toHaveBeenCalled();
 });
 
+test("the sign-in page shows the Argus logo, not the old B² text mark", () => {
+  setAuthClient(fakeAuth());
+  setAdapter(stub());
+  const { container } = render(<App />);
+  const logo = screen.getByRole("img", { name: "Argus" });
+  expect(logo).toHaveAttribute("src", "/argus-logo.svg");
+  expect(container.querySelector(".signin-page")).toContainElement(logo);
+  expect(container.textContent).not.toContain("B²");
+  // the lockup already spells the name, so no second ARGUS label under it
+  expect(container.querySelector(".signin-card .eyebrow")).toBeNull();
+});
+
 test("signing in from the sign-in page opens the app with the account bar", async () => {
   const auth = fakeAuth();
   setAuthClient(auth);
@@ -154,7 +166,7 @@ test("signing in from the sign-in page opens the app with the account bar", asyn
   expect(auth.signIn).toHaveBeenCalledTimes(1);
   expect(await screen.findByText("digitalocean_firewall.demo")).toBeInTheDocument();
   expect(screen.getByText("dana@example.com")).toBeInTheDocument();
-  expect(screen.getByText(/verified google account/i)).toBeInTheDocument();
+  expect(screen.queryByText(/verified google account/i)).toBeNull();
 });
 
 test("while Firebase restores the session: a checking state, not the sign-in page", () => {
@@ -170,20 +182,63 @@ test("while Firebase restores the session: a checking state, not the sign-in pag
   expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
 });
 
-test("signed in: account bar shows who, and sign out returns to the sign-in page", async () => {
+const openAccountMenu = () =>
+  fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+
+test("signed in: one account button shows name and email, with no verified badge and no sign-out until opened", () => {
+  setAuthClient(fakeAuth(DANA));
+  setAdapter(stub());
+  render(<App />);
+  const trigger = screen.getByRole("button", { name: /account menu/i });
+  expect(trigger).toHaveTextContent("Dana");
+  expect(trigger).toHaveTextContent("dana@example.com");
+  expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+  expect(trigger).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByText(/verified google account/i)).toBeNull();
+  expect(screen.queryByRole("button", { name: /^sign out$/i })).toBeNull();
+});
+
+test("signed in: opening the account button drops down Sign out, which returns to the sign-in page", async () => {
   const auth = fakeAuth(DANA);
   setAuthClient(auth);
   setAdapter(stub());
   render(<App />);
-  expect(screen.getByText("Dana")).toBeInTheDocument();
-  expect(screen.getByText("dana@example.com")).toBeInTheDocument();
-  expect(screen.getByText(/verified google account/i)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: /^sign out$/i }));
+  openAccountMenu();
+  expect(screen.getByRole("button", { name: /account menu/i })).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(screen.getByRole("menuitem", { name: /^sign out$/i }));
   expect(auth.signOut).toHaveBeenCalledTimes(1);
   expect(
     await screen.findByRole("button", { name: /sign in with google/i }),
   ).toBeInTheDocument();
   expect(screen.queryByText("digitalocean_firewall.demo")).toBeNull();
+});
+
+test("account menu closes on a second click, on Escape (returning focus), and on an outside click", () => {
+  setAuthClient(fakeAuth(DANA));
+  setAdapter(stub());
+  render(<App />);
+  const trigger = screen.getByRole("button", { name: /account menu/i });
+  const signOut = () => screen.queryByRole("menuitem", { name: /^sign out$/i });
+  fireEvent.click(trigger);
+  expect(signOut()).not.toBeNull();
+  fireEvent.click(trigger);
+  expect(signOut()).toBeNull();
+  fireEvent.click(trigger);
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+  expect(signOut()).toBeNull();
+  expect(trigger).toHaveFocus();
+  fireEvent.click(trigger);
+  fireEvent.mouseDown(document.body);
+  expect(signOut()).toBeNull();
+});
+
+test("clicking inside the open menu does not count as an outside click", () => {
+  setAuthClient(fakeAuth(DANA));
+  setAdapter(stub());
+  render(<App />);
+  openAccountMenu();
+  fireEvent.mouseDown(screen.getByRole("menu"));
+  expect(screen.queryByRole("menuitem", { name: /^sign out$/i })).not.toBeNull();
 });
 
 test("sign-in errors are explained (blocked popup)", async () => {
@@ -420,7 +475,8 @@ test("admin: signing out leaves the admin view for the sign-in page", async () =
     await screen.findByRole("button", { name: /continue as dana@example.com/i }),
   );
   await waitFor(() => expect(adminLog).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole("button", { name: /^sign out$/i }));
+  openAccountMenu();
+  fireEvent.click(screen.getByRole("menuitem", { name: /^sign out$/i }));
   expect(await screen.findByRole("button", { name: /sign in with google/i })).toBeInTheDocument();
   expect(screen.queryByText(/admin log/i, { selector: ".eyebrow" })).toBeNull();
 });
