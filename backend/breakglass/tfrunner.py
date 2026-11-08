@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from . import config
+
 SCAN_PLAN = ".breakglass-scan.tfplan"
 APPLY_PLAN = ".breakglass-apply.tfplan"
 
@@ -51,7 +53,7 @@ def child_env() -> dict[str, str]:
     env["TF_IN_AUTOMATION"] = "1"
     env["TF_INPUT"] = "0"
     if not env.get(TOKEN_ENV):
-        token_file = Path(os.environ.get("BG_DO_TOKEN_FILE", DEFAULT_TOKEN_FILE)).expanduser()
+        token_file = Path(config.bg_env("BG_DO_TOKEN_FILE") or DEFAULT_TOKEN_FILE).expanduser()
         try:
             token = token_file.read_text(encoding="utf-8").strip()
         except OSError:

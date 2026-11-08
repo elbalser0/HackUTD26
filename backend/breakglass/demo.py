@@ -21,7 +21,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
-from . import detector, rules
+from . import config, detector, rules
 from .config import Settings
 from .db import Database
 from .textsafe import safe
@@ -34,7 +34,7 @@ def _token_present() -> bool:
     """Presence only: the value is never read or printed by this module."""
     if os.environ.get(TOKEN_ENV):
         return True
-    token_file = Path(os.environ.get("BG_DO_TOKEN_FILE", DEFAULT_TOKEN_FILE)).expanduser()
+    token_file = Path(config.bg_env("BG_DO_TOKEN_FILE") or DEFAULT_TOKEN_FILE).expanduser()
     try:
         return token_file.is_file() and token_file.stat().st_size > 0
     except OSError:
@@ -42,7 +42,7 @@ def _token_present() -> bool:
 
 
 def default_api_health(url: str | None = None) -> bool:
-    url = url or os.environ.get("BG_API_URL", "http://127.0.0.1:8000") + "/api/health"
+    url = url or config.bg_env("BG_API_URL", "http://127.0.0.1:8000") + "/api/health"
     try:
         with urllib.request.urlopen(url, timeout=2) as resp:  # noqa: S310 (fixed local URL)
             return resp.status == 200

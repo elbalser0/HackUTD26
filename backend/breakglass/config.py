@@ -4,8 +4,12 @@ Security notes:
 - The Terraform working directory is fixed by server-side configuration
   (BG_TF_DIR) and must resolve inside one of the repository's Terraform roots
   (break-glass-infra/) unless BG_ALLOW_TF_DIR_OUTSIDE_REPO=1 is set. It is never taken from HTTP input.
-- No credential is read or stored here. Terraform reads DIGITALOCEAN_TOKEN
+- No cloud credential is read or stored here. Terraform reads DIGITALOCEAN_TOKEN
   from its own environment.
+- Settings may also come from the repo-root .env (override the path with
+  BG_DOTENV_FILE, disable with BG_NO_DOTENV=1). Only keys starting with BG_ are
+  read; every other line (e.g. DIGITALOCEAN_TOKEN) is ignored and never stored.
+  Values already in the real environment win. os.environ is never modified.
 """
 
 from __future__ import annotations
@@ -41,7 +45,51 @@ class Settings:
     admin_emails: tuple[str, ...] = ()
 
 
-def _resolve_tf_dir(raw: str | None) -> Path | None:
+def dotenv_path() -> Path:
+    return Path(os.environ.get("BG_DOTENV_FILE") or REPO_ROOT / ".env")
+
+
+def read_dotenv_bg(path: Path) -> dict[str, str]:
+    """BG_* key/value pairs from a .env file. Other keys are skipped without being kept."""
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
+        return {}
+    out: dict[str, str] = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line.startswith("export "):
+            line = line[len("export "):].lstrip()
+        if not line.startswith("BG_") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if len(key) <= 3 or not all(c.isupper() or c.isdigit() or c == "_" for c in key):
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        else:
+            value = value.split(" #", 1)[0].rstrip()
+        out[key] = value
+    return out
+
+
+def _environ() -> dict[str, str]:
+    if os.environ.get("BG_NO_DOTENV") == "1":
+        return dict(os.environ)
+    return {**read_dotenv_bg(dotenv_path()), **os.environ}
+
+
+def bg_env(key: str, default: str | None = None) -> str | None:
+    """One BG_* setting, from the real environment or the repo-root .env."""
+    if not key.startswith("BG_"):
+        raise ValueError("bg_env only reads BG_* settings")
+    return _environ().get(key, default)
+
+
+def _resolve_tf_dir(raw: str | None, env: dict[str, str] | None = None) -> Path | None:
+    env = os.environ if env is None else env
     path = Path(raw).expanduser() if raw else DEFAULT_TF_DIR
     try:
         path = path.resolve(strict=True)
@@ -49,7 +97,7 @@ def _resolve_tf_dir(raw: str | None) -> Path | None:
         return None
     if not path.is_dir():
         return None
-    if os.environ.get("BG_ALLOW_TF_DIR_OUTSIDE_REPO") != "1":
+    if env.get("BG_ALLOW_TF_DIR_OUTSIDE_REPO") != "1":
         roots = [r.resolve() for r in ALLOWED_TF_ROOTS]
         if not any(path == r or r in path.parents for r in roots):
             raise ConfigError("BG_TF_DIR must be inside " + " or ".join(str(r) for r in roots))
@@ -57,18 +105,19 @@ def _resolve_tf_dir(raw: str | None) -> Path | None:
 
 
 def load_settings() -> Settings:
-    origins = os.environ.get("BG_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    env = _environ()
+    origins = env.get("BG_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
     return Settings(
-        db_path=Path(os.environ.get("BG_DB_PATH", BACKEND_DIR / "breakglass.db")),
-        tf_dir=_resolve_tf_dir(os.environ.get("BG_TF_DIR")),
-        environment=os.environ.get("BG_ENVIRONMENT", "demo"),
+        db_path=Path(env.get("BG_DB_PATH", BACKEND_DIR / "breakglass.db")),
+        tf_dir=_resolve_tf_dir(env.get("BG_TF_DIR"), env),
+        environment=env.get("BG_ENVIRONMENT", "demo"),
         cors_origins=tuple(o.strip() for o in origins.split(",") if o.strip()),
-        allowed_hosts=tuple(h.strip() for h in os.environ.get(
+        allowed_hosts=tuple(h.strip() for h in env.get(
             "BG_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",") if h.strip()),
         # Absolute path so Windows never runs a terraform.exe found in the current directory.
-        terraform_bin=shutil.which(os.environ.get("BG_TERRAFORM_BIN", "terraform")) or "terraform",
-        admin_token=os.environ.get("BG_ADMIN_TOKEN") or None,
-        firebase_project_id=(os.environ.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
-        admin_emails=tuple(e.strip().lower() for e in os.environ.get("BG_ADMIN_EMAILS", "").split(",")
+        terraform_bin=shutil.which(env.get("BG_TERRAFORM_BIN", "terraform")) or "terraform",
+        admin_token=env.get("BG_ADMIN_TOKEN") or None,
+        firebase_project_id=(env.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
+        admin_emails=tuple(e.strip().lower() for e in env.get("BG_ADMIN_EMAILS", "").split(",")
                            if e.strip()),
     )
