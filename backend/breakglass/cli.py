@@ -17,7 +17,7 @@ from . import service, wrapper
 from .config import BACKEND_DIR, ConfigError, load_settings
 from .db import Database
 from .models import DecisionIn, Intent, ReportIn
-from .textsafe import safe
+from .textsafe import has_control, safe
 from .tfrunner import SCAN_PLAN, APPLY_PLAN, Terraform, TerraformError
 
 AUTHORED_DEMO_FIXTURE = BACKEND_DIR / "tests" / "fixtures" / "authored" / "refresh_drift_8443.json"
@@ -88,7 +88,8 @@ def prompt_for_reasons(db: Database, record_ids: list[str], ask: Callable[[str],
             out("Skipped (empty reason).")
             continue
         key = ask("Keep it, revert it, or unsure? [k/r/u, Enter=skip]: ").strip().lower()[:1]
-        service.report(db, rid, ReportIn(reporter=reporter, reason=reason[:500], intent=INTENT_KEYS.get(key)))
+        service.report(db, rid, ReportIn(reporter=reporter, reason=reason[:500], intent=INTENT_KEYS.get(key)),
+                       source="cli")
         out("Saved (self-reported).")
 
 
@@ -165,8 +166,14 @@ def cmd_report(args, db: Database, settings) -> int:
 
 
 def cmd_decide(args, db: Database, settings) -> int:
+    if args.reviewer is not None:
+        args.reviewer = args.reviewer.strip()[:100] or None
+        if args.reviewer and has_control(args.reviewer):
+            print("error: --reviewer must not contain control characters")
+            return 1
     try:
-        rec = service.decide(db, args.id, DecisionIn(intent=Intent(args.intent), note=args.note))
+        rec = service.decide(db, args.id, DecisionIn(intent=Intent(args.intent), note=args.note),
+                             source="cli", actor=args.reviewer)
     except (service.NotFound, service.Conflict, ValueError) as e:
         print(f"error: {e}")
         return 1
@@ -177,7 +184,7 @@ def cmd_decide(args, db: Database, settings) -> int:
 
 def cmd_apply(args, db: Database, settings) -> int:
     tf = _terraform(settings)
-    result = wrapper.guarded_apply(db, tf, settings.environment)
+    result = wrapper.guarded_apply(db, tf, settings.environment, reviewer=args.reviewer)
     return 0 if result.outcome.value not in ("failed", "aborted_plan_changed") else 1
 
 
@@ -272,9 +279,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("id")
     s.add_argument("intent", choices=[i.value for i in Intent if i != Intent.UNSET])
     s.add_argument("--note")
+    s.add_argument("--reviewer", help="name recorded with this decision (self-reported)")
     s.set_defaults(func=cmd_decide)
 
     s = sub.add_parser("apply", help="plan, warn about reversed emergency changes, apply only after explicit confirmation")
+    s.add_argument("--reviewer", help="name recorded with your decision (self-reported); default: your OS user name")
     s.set_defaults(func=cmd_apply)
 
     s = sub.add_parser("recheck", help="resolve records only when live, state and config provably agree")

@@ -38,7 +38,8 @@ uvicorn breakglass.api:app --port 8000
 | `ResolutionReason` | `verified_aligned` · `superseded` · or `null` while open |
 | `CheckStatus` | `current` · `stale` · `failed` · `unsupported` |
 | `ChangeKind` | `added` (rule exists live, not in Terraform) · `removed` (rule in Terraform, gone live) · `modified` (same protocol+sources, port changed) |
-| `AckOutcome` | `pending` · `no_changes` · `cancelled` · `kept` · `deferred` · `applied_no_warnings` · `reverted_applied` · `override_applied` · `unverified_bypass_applied` · `aborted_plan_changed` · `failed` |
+| `EventKind` | `report` · `decision` · `review` · `run_started` · `run_finished` |
+| `AckOutcome` | `pending` · `running` (decision saved, apply started) · `unknown` (no completion recorded; interrupted or crashed) · `no_changes` · `cancelled` · `kept` · `deferred` · `applied_no_warnings` · `reverted_applied` · `override_applied` · `unverified_bypass_applied` · `aborted_plan_changed` · `failed` |
 
 Meaning of `last_check_status`: `current` = seen in the most recent successful scan; `stale` = not re-checked since an older scan; `failed` = the most recent check errored (treat as unknown, **not** as fine); `unsupported` = evidence could not be interpreted (unknown/sensitive values).
 
@@ -117,12 +118,18 @@ A record with `reason: null` is an **unexplained manual change**. Still show it 
   ],
   "check_status": "current",
   "coverage_note": "Checked digitalocean_firewall inbound rules only. Other attributes, other resource types and OS-level changes are not covered.",
-  "ack_outcome": "kept",
+  "ack_outcome": "reverted_applied",
   "ack_note": null,
-  "completed_at": "2026-11-08T09:12:40.000000Z"
+  "completed_at": "2026-11-08T09:12:40.000000Z",
+  "started_at": "2026-11-08T09:12:31.000000Z",
+  "reviewer": "Dana",
+  "reviewer_assurance": "self-reported",
+  "rationale": "webhook fixed upstream; 8443 no longer needed"
 }
 ```
-Nullable: `plan_fingerprint` (null if planning failed), `ack_note`, `completed_at` (null while `pending`).
+Nullable: `plan_fingerprint` (null if planning failed), `ack_note`, `completed_at` (null while `pending` or `running`, and for `unknown`), `started_at` (null unless Terraform was started), `reviewer`, `reviewer_assurance`, `rationale`.
+`reviewer` and `reviewer_assurance` are set on every wrapper run. `reviewer_assurance` is `"self-reported"` (typed with `--reviewer`) or `"local-os-user (not verified)"` (the operator's OS account). Neither is verified identity. `started_at` and `rationale` are set only when Terraform was started.
+Show `unknown` as **outcome unknown / interrupted**, never as success.
 `check_status: "failed"` means **verification was unavailable**. The UI must not show that as "no conflicts".
 
 ## Endpoints
@@ -155,7 +162,7 @@ Body (unknown fields rejected):
 - `intent`: optional `Intent`. If omitted, intent is unchanged.
 
 `200`: updated `Record`. `404` unknown id. `409` if the record is `resolved`. `422` validation.
-Reporting again overwrites the previous reason. Last report wins, and `reported_at` updates.
+Reporting again updates the record's displayed `reason`/`reporter` (latest wins), but **every report is kept** as an event (`GET /api/records/{id}/events`). Nothing is erased.
 
 ### `POST /api/records/{id}/decision`
 Body:
@@ -164,6 +171,36 @@ Body:
 ```
 `200`: updated `Record`. `404` / `409` (resolved) / `422`.
 A decision **does not resolve** the record and **does not apply anything**. Warnings keep firing until a verified re-check shows the live value and Terraform agree.
+
+### `GET /api/records/{id}/events`
+Append-only history for one record, oldest first: `report`, `decision` (web/CLI intent), and `review` (wrapper decision on a specific plan).
+`200`: `{ "events": [Event, …] }`. `404` if unknown.
+
+### `GET /api/apply-runs/{id}/events`
+Events for one wrapper run: `review` (one per affected record), `run_started`, `run_finished`. `200` / `404`.
+
+### Event
+```json
+{
+  "id": "evt_3b1f09c2aa",
+  "environment": "demo",
+  "record_id": "rec_7f3a9c2e1b",
+  "run_id": "run_41c0d8aa2f",
+  "kind": "review",
+  "actor": "Dana",
+  "actor_assurance": "self-reported",
+  "data": { "decision": "revert", "plan_fingerprint": "sha256:5be1…", "rationale": "webhook fixed upstream", "source": "wrapper" },
+  "created_at": "2026-11-08T09:12:31.000000Z"
+}
+```
+`record_id` is null for run-level events, and `run_id` is null for web/CLI reports and decisions. The fields in `data` depend on `kind`:
+- `report`: `reason`, `intent`, `source`.
+- `decision`: `intent`, `note`, `source`.
+- `review`: `decision` (`keep` · `defer` · `cancel` · `revert` · `revert-not-confirmed` · `override` · `unverified-bypass`), `plan_fingerprint`, `rationale`, `source`. There is one per affected record. A run with no affected records has no review events.
+- `run_started`: `decision` (any of the above, or `state-sync` / `apply` for runs with no affected records), `plan_fingerprint`, `record_ids`.
+- `run_finished`: `outcome`, `applied` (`null` when the outcome is `unknown`), `note`.
+
+`actor_assurance` is `"self-reported"`, `"local-os-user (not verified)"`, or `"system"` (the backend itself, e.g. marking an unfinished run `unknown`).
 
 ### `GET /api/apply-runs/{id}`
 `200`: `ApplyRun`. `404` if unknown.

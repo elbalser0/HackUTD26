@@ -54,7 +54,9 @@ class ChangeKind(StrEnum):
 
 
 class AckOutcome(StrEnum):
-    PENDING = "pending"
+    PENDING = "pending"        # reviewing; nothing approved yet
+    RUNNING = "running"        # decision persisted, terraform apply started
+    UNKNOWN = "unknown"        # no completion recorded (interrupted/crashed)
     NO_CHANGES = "no_changes"
     CANCELLED = "cancelled"
     KEPT = "kept"
@@ -255,6 +257,30 @@ class WarningOut(BaseModel):
     first_detected_at: datetime
 
 
+class EventKind(StrEnum):
+    REPORT = "report"            # explanation captured (web or CLI)
+    DECISION = "decision"        # intent set outside the wrapper (web or CLI)
+    REVIEW = "review"            # wrapper decision on a specific plan
+    RUN_STARTED = "run_started"  # terraform apply about to execute the reviewed plan
+    RUN_FINISHED = "run_finished"
+
+
+class EventOut(BaseModel):
+    id: str
+    environment: str
+    record_id: str | None
+    run_id: str | None
+    kind: EventKind
+    actor: str | None
+    actor_assurance: str   # "self-reported" | "local-os-user (not verified)" | "system"
+    data: dict
+    created_at: datetime
+
+
+class EventList(BaseModel):
+    events: list[EventOut]
+
+
 class ApplyRunOut(BaseModel):
     id: str
     environment: str
@@ -267,6 +293,10 @@ class ApplyRunOut(BaseModel):
     ack_outcome: AckOutcome
     ack_note: str | None
     completed_at: datetime | None
+    started_at: datetime | None = None          # when terraform apply started (decision already saved)
+    reviewer: str | None = None
+    reviewer_assurance: str | None = None
+    rationale: str | None = None
 
 
 class ApplyRunList(BaseModel):

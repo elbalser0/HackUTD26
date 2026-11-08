@@ -25,6 +25,7 @@ from .models import (
     ApplyRunList,
     ApplyRunOut,
     DecisionIn,
+    EventList,
     HealthOut,
     RecordList,
     RecordOut,
@@ -58,6 +59,10 @@ def apply_run_out(row) -> ApplyRunOut:
         ack_outcome=row["ack_outcome"],
         ack_note=row["ack_note"],
         completed_at=row["completed_at"],
+        started_at=row["started_at"],
+        reviewer=row["reviewer"],
+        reviewer_assurance=row["reviewer_assurance"],
+        rationale=row["rationale"],
     )
 
 
@@ -147,6 +152,20 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
     @app.post("/api/records/{record_id}/decision", response_model=RecordOut)
     def post_decision(record_id: str, body: DecisionIn):
         return service.decide(database(), record_id, body)
+
+    @app.get("/api/records/{record_id}/events", response_model=EventList)
+    def record_events(record_id: str):
+        """Append-only history for one record: reports, decisions, wrapper reviews (PRD R6/R10)."""
+        if database().get_record(record_id) is None:
+            raise service.NotFound(f"record {record_id} not found")
+        return EventList(events=[service.event_out(e) for e in database().list_events(record_id=record_id)])
+
+    @app.get("/api/apply-runs/{run_id}/events", response_model=EventList)
+    def run_events(run_id: str):
+        """Reviews, run_started and run_finished events for one wrapper run (PRD R7/R8)."""
+        if database().get_apply_run(run_id) is None:
+            raise service.NotFound(f"apply run {run_id} not found")
+        return EventList(events=[service.event_out(e) for e in database().list_events(run_id=run_id)])
 
     @app.get("/api/apply-runs", response_model=ApplyRunList)
     def list_apply_runs(limit: int = Query(default=20, ge=1, le=100)):

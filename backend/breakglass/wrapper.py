@@ -3,12 +3,22 @@
 The wrapper owns confirmation: `terraform apply <saved plan>` does not prompt,
 so nothing is applied unless the human types an explicit confirmation here.
 Running Terraform directly bypasses this wrapper (documented limitation).
+
+PRD v3:
+- R6/R10: every wrapper decision (keep, defer, cancel, revert, override, bypass)
+  is appended to the events table; nothing earlier is overwritten.
+- R7: the review decision, rationale, reviewer and exact plan fingerprint are
+  persisted in ONE transaction BEFORE terraform runs. If that write fails,
+  nothing is applied.
+- R8: a run that never records completion is later shown as `unknown`.
 """
 
 from __future__ import annotations
 
+import getpass
 import json
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Callable
 
 from . import matcher, service, suggest
@@ -16,12 +26,11 @@ from .db import Database, new_id, rule_from_json, ts
 from .models import (
     AckOutcome,
     CheckStatus,
-    DecisionIn,
     Intent,
     ProposedChangeOut,
     utcnow,
 )
-from .textsafe import safe
+from .textsafe import has_control, safe
 from .tfrunner import APPLY_PLAN, SCAN_PLAN, Terraform, TerraformError
 
 COVERAGE_NOTE = ("Checked digitalocean_firewall inbound rules only. Other attributes, other resource "
@@ -29,6 +38,8 @@ COVERAGE_NOTE = ("Checked digitalocean_firewall inbound rules only. Other attrib
 RACE_NOTE = ("Note: the cloud can still change between this plan and the apply. Terraform applies the "
              "saved plan exactly; it will fail if state changed, but not if live infrastructure changed.")
 BYPASS_PHRASE = "unverified-bypass"
+OS_USER_ASSURANCE = "local-os-user (not verified)"
+SELF_REPORTED = "self-reported"
 
 
 @dataclass
@@ -44,35 +55,145 @@ Prompt = Callable[[str], str]
 Out = Callable[[str], None]
 
 
+def default_reviewer() -> tuple[str | None, str]:
+    try:
+        return getpass.getuser(), OS_USER_ASSURANCE
+    except Exception:
+        return None, SELF_REPORTED
+
+
+@dataclass
+class _Ctx:
+    db: Database
+    tf: Terraform
+    environment: str
+    run_id: str
+    reviewer: str | None
+    assurance: str
+    prompt: Prompt
+    out: Out
+    plan_hash: str | None = None
+    apply_started: bool = False   # set right before terraform apply runs
+    finished: bool = False        # set once the final outcome is recorded
+    result: "ApplyOutcome | None" = None
+
+    def review(self, decision: str, rows, *, intent: Intent | None = None, rationale: str | None = None,
+               start_run: bool = False) -> None:
+        """Append review events (one per affected record) and, when starting the
+        run, mark it running with reviewer/rationale, all in one transaction."""
+        now_s = ts(utcnow())
+        with self.db.tx() as conn:
+            for r in rows:
+                if intent is not None:
+                    self.db.update_record(r["id"], {"intent": intent.value, "intent_updated_at": now_s,
+                                                    "intent_note": rationale}, conn)
+                service._event(self.db, conn, environment=self.environment, kind="review", record_id=r["id"],
+                               run_id=self.run_id, actor=self.reviewer, assurance=self.assurance, now_s=now_s,
+                               data={"decision": decision, "plan_fingerprint": self.plan_hash,
+                                     "rationale": rationale, "source": "wrapper"})
+            if start_run:
+                self.db.update_apply_run(self.run_id, {
+                    "ack_outcome": AckOutcome.RUNNING.value, "started_at": now_s, "reviewer": self.reviewer,
+                    "reviewer_assurance": self.assurance, "rationale": rationale,
+                    "plan_fingerprint": self.plan_hash}, conn)
+                service._event(self.db, conn, environment=self.environment, kind="run_started", record_id=None,
+                               run_id=self.run_id, actor=self.reviewer, assurance=self.assurance, now_s=now_s,
+                               data={"decision": decision, "plan_fingerprint": self.plan_hash,
+                                     "record_ids": [r["id"] for r in rows]})
+
+
 def guarded_apply(db: Database, tf: Terraform, environment: str,
-                  prompt: Prompt = input, out: Out = print) -> ApplyOutcome:
+                  prompt: Prompt = input, out: Out = print,
+                  reviewer: str | None = None) -> ApplyOutcome:
+    if reviewer and reviewer.strip() and not has_control(reviewer):
+        who, assurance = reviewer.strip()[:100], SELF_REPORTED
+    else:
+        who, assurance = default_reviewer()
+
     run_id = new_id("run")
     db.insert_apply_run({
         "id": run_id, "environment": environment, "generated_at": ts(utcnow()),
         "plan_fingerprint": None, "proposed_changes_json": "[]", "warnings_json": "[]",
         "check_status": CheckStatus.FAILED.value, "coverage_note": COVERAGE_NOTE,
         "ack_outcome": AckOutcome.PENDING.value, "ack_note": None, "completed_at": None,
+        "reviewer": who, "reviewer_assurance": assurance,
     })
+    # PRD R8: earlier runs that never recorded completion are unknown, not successful.
+    for old in db.mark_unfinished_runs_unknown(environment, exclude_id=run_id):
+        out(f"Note: earlier apply run {old} has no recorded completion; its outcome is marked unknown.")
+
+    ctx = _Ctx(db, tf, environment, run_id, who, assurance, prompt, out)
 
     def finish(outcome: AckOutcome, check: CheckStatus, warnings: list[str], applied=False, note=None) -> ApplyOutcome:
-        db.update_apply_run(run_id, {"ack_outcome": outcome.value, "ack_note": note,
-                                     "check_status": check.value, "completed_at": ts(utcnow())})
+        now_s = ts(utcnow())
+        result = ApplyOutcome(run_id, outcome, check, warnings, applied)
+        try:
+            with db.tx() as conn:  # run row + run_finished event together
+                db.update_apply_run(run_id, {"ack_outcome": outcome.value, "ack_note": note,
+                                             "check_status": check.value, "completed_at": now_s}, conn)
+                service._event(db, conn, environment=environment, kind="run_finished", record_id=None,
+                               run_id=run_id, actor=who, assurance=assurance, now_s=now_s,
+                               data={"outcome": outcome.value, "applied": applied, "note": note})
+        except Exception as e:
+            out(f"WARNING: outcome '{outcome.value}' could not be recorded ({type(e).__name__}). "
+                + ("Terraform DID apply. " if applied else "")
+                + "The run will show as unknown; run `breakglass scan` and `breakglass recheck`.")
+        ctx.finished, ctx.result = True, result
         out(f"[apply run {run_id}] outcome: {outcome.value}")
-        return ApplyOutcome(run_id, outcome, check, warnings, applied)
+        return result
 
     try:
-        return _guarded_apply(db, tf, environment, run_id, prompt, out, finish)
+        return _guarded_apply(ctx, finish)
     except (KeyboardInterrupt, EOFError):
+        if ctx.finished and ctx.result is not None:
+            out("\nInterrupted after the outcome was recorded; nothing changed.")
+            return ctx.result
+        if ctx.apply_started:
+            out("\nINTERRUPTED after terraform apply started. Live state is unknown: "
+                "run `breakglass scan` and `breakglass recheck`.")
+            return finish(AckOutcome.FAILED, CheckStatus.FAILED, [],
+                          note="interrupted after apply started; live state unknown")
         out("\nCancelled. Nothing applied.")
         return finish(AckOutcome.CANCELLED, CheckStatus.FAILED, [])
     finally:
         tf.cleanup()
 
 
-def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) -> ApplyOutcome:
+def _age(iso: str) -> str:
+    try:
+        then = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except ValueError:
+        return "age unknown"
+    mins = int((datetime.now(timezone.utc) - then).total_seconds() // 60)
+    if mins < 60:
+        return f"detected {mins}m ago"
+    return f"detected {mins // 60}h {mins % 60}m ago"
+
+
+def _prior_decisions(db: Database, record_id: str, limit: int = 3) -> list[str]:
+    lines = []
+    for e in db.list_events(record_id=record_id):
+        if e["kind"] not in ("decision", "review"):
+            continue
+        d = json.loads(e["data_json"])
+        what = d.get("decision") or d.get("intent")
+        who = safe(e["actor"]) if e["actor"] else "unnamed"
+        why = f': "{safe(d.get("rationale") or d.get("note"))}"' if (d.get("rationale") or d.get("note")) else ""
+        lines.append(f"{e['created_at'][:16].replace('T', ' ')} {what} by {who} ({e['actor_assurance']}){why}")
+    return lines[-limit:]
+
+
+def _ask_rationale(ctx: _Ctx) -> str | None:
+    text = ctx.prompt("Short rationale for this decision (required, saved with it): ").strip()
+    if not text or has_control(text):
+        ctx.out("A rationale is required to proceed (no control characters). Nothing applied.")
+        return None
+    return text[:500]
+
+
+def _guarded_apply(ctx: _Ctx, finish) -> ApplyOutcome:
+    db, tf, environment, out, prompt = ctx.db, ctx.tf, ctx.environment, ctx.out, ctx.prompt
     problems: list[str] = []
-    workspace = cfg_hash = None
-    has_changes = None
     plan_json = None
 
     # 1. Context: workspace + config fingerprint
@@ -110,7 +231,8 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
     except (TerraformError, OSError) as e:
         out(f"ERROR: {e}")
         return finish(AckOutcome.FAILED, CheckStatus.FAILED, [], note="plan failed")
-    plan_hash = tf.plan_hash(APPLY_PLAN)
+    ctx.plan_hash = tf.plan_hash(APPLY_PLAN)
+    db.update_apply_run(ctx.run_id, {"plan_fingerprint": ctx.plan_hash})
 
     if not has_changes:
         if not (scan_ok and drift_seen):
@@ -124,16 +246,17 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
         if ans != "yes":
             out("Cancelled. Nothing applied.")
             return finish(AckOutcome.NO_CHANGES, CheckStatus.CURRENT, [], note="state sync declined")
-        return _apply_exact(tf, plan_hash, cfg_hash, workspace, out, finish, CheckStatus.CURRENT, [],
-                            AckOutcome.APPLIED_NO_WARNINGS, note="state-only sync (no resource changes)")
+        return _apply_exact(ctx, cfg_hash, workspace, finish, CheckStatus.CURRENT, [],
+                            AckOutcome.APPLIED_NO_WARNINGS, decision="state-sync", rows=[],
+                            note="state-only sync (no resource changes)")
     try:
         plan_json = tf.show_json(APPLY_PLAN)
     except TerraformError as e:
         problems.append(f"could not read plan JSON: {e}")
 
     # 4. Match against open records
-    warn_rows = []
-    unknown_rows = []
+    warn_rows: list = []
+    unknown_rows: list = []
     m = None
     if plan_json is not None:
         rows = db.list_records(resolution="open", environment=environment)
@@ -145,9 +268,10 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
 
     verified = scan_ok and plan_json is not None and m is not None and not m.errors
     check = CheckStatus.CURRENT if verified else CheckStatus.FAILED
-    warning_objs = [service.warning_out(r) for r in warn_rows + unknown_rows]
-    db.update_apply_run(run_id, {
-        "plan_fingerprint": plan_hash,
+    affected = warn_rows + unknown_rows
+    warning_objs = [service.warning_out(r) for r in affected]
+    db.update_apply_run(ctx.run_id, {
+        "plan_fingerprint": ctx.plan_hash,
         "proposed_changes_json": json.dumps([ProposedChangeOut(
             resource_address=c.resource_address, resource_type=c.resource_type,
             actions=list(c.actions), summary=c.summary).model_dump() for c in (m.proposed_changes if m else [])]),
@@ -162,10 +286,10 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
     if m is None:
         out("  (unavailable)")
     out(f"Coverage: {COVERAGE_NOTE}")
+    out(f"Reviewer: {safe(ctx.reviewer) if ctx.reviewer else 'unknown'} ({ctx.assurance})")
     out("")
 
     warn_texts = [w.message for w in warning_objs]
-    pending_outcome = AckOutcome.APPLIED_NO_WARNINGS
     nc_note = f"{len(not_checked)} change(s) outside coverage were NOT CHECKED" if not_checked else None
 
     if not verified:
@@ -176,24 +300,32 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
             out(f"  ! {safe(w.message)}")
         ans = prompt(f"Type '{BYPASS_PHRASE}' to apply this saved plan anyway (anything else cancels): ").strip()
         if ans != BYPASS_PHRASE:
+            ctx.review("cancel", affected)
             out("Cancelled. Nothing applied.")
             return finish(AckOutcome.CANCELLED, check, warn_texts)
-        pending_outcome = AckOutcome.UNVERIFIED_BYPASS_APPLIED
+        rationale = _ask_rationale(ctx)
+        if rationale is None:
+            ctx.review("cancel", affected)
+            return finish(AckOutcome.CANCELLED, check, warn_texts, note="no rationale given")
+        return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts,
+                            AckOutcome.UNVERIFIED_BYPASS_APPLIED, decision="unverified-bypass",
+                            rows=affected, rationale=rationale, note=nc_note)
 
-    elif warning_objs:
+    if warning_objs:
         out("WARNING: this apply would reverse manual emergency change(s):")
-        for r, w in zip(warn_rows + unknown_rows, warning_objs):
+        for r, w in zip(affected, warning_objs):
             tag = "" if r in warn_rows else " [reversal could not be ruled out]"
             out(f"  ! {safe(w.message)}{tag}")
-            out(f"    record {r['id']} | intent: {r['intent']} | reporter and reason are self-reported, not verified")
+            out(f"    record {r['id']} | {_age(r['first_detected_at'])} | intent: {r['intent']} | "
+                "reporter and reason are self-reported, not verified")
+            for line in _prior_decisions(db, r["id"]):
+                out(f"    prior: {line}")
         out("")
         choice = prompt("[k]eep change (no apply) / [r]evert it (apply) / [d]efer / [c]ancel / [o]verride: ").strip().lower()
-        ids = [r["id"] for r in warn_rows + unknown_rows]
 
         if choice in ("k", "keep"):
-            for i in ids:
-                service.decide(db, i, DecisionIn(intent=Intent.KEEP))
-            for r in warn_rows + unknown_rows:
+            ctx.review("keep", affected, intent=Intent.KEEP)
+            for r in affected:
                 s = suggest.suggest_literal_edit(tf.tf_dir, r["resource_address"],
                                                  rule_from_json(r["baseline_json"]), rule_from_json(r["observed_json"]))
                 out(s if s else f"No single literal edit found for {r['resource_address']}; update the Terraform rule by hand.")
@@ -201,48 +333,58 @@ def _guarded_apply(db, tf: Terraform, environment, run_id, prompt, out, finish) 
                 "(records the live value in state) and `breakglass recheck`.")
             return finish(AckOutcome.KEPT, check, warn_texts)
         if choice in ("d", "defer"):
-            for i in ids:
-                service.decide(db, i, DecisionIn(intent=Intent.DEFER))
+            ctx.review("defer", affected, intent=Intent.DEFER)
             out("Deferred. Nothing applied.")
             return finish(AckOutcome.DEFERRED, check, warn_texts)
         if choice in ("r", "revert"):
-            for i in ids:
-                service.decide(db, i, DecisionIn(intent=Intent.REVERT))
             ans = prompt("Type 'revert' to apply this exact saved plan and undo the live change(s): ").strip()
             if ans != "revert":
+                ctx.review("revert-not-confirmed", affected, intent=Intent.REVERT)
                 out("Revert intent saved. Nothing applied.")
                 return finish(AckOutcome.CANCELLED, check, warn_texts, note="revert intent saved, apply not confirmed")
-            pending_outcome = AckOutcome.REVERTED_APPLIED
-        elif choice in ("o", "override"):
+            rationale = _ask_rationale(ctx)
+            if rationale is None:
+                ctx.review("revert-not-confirmed", affected, intent=Intent.REVERT)
+                return finish(AckOutcome.CANCELLED, check, warn_texts, note="no rationale given")
+            return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.REVERTED_APPLIED,
+                                decision="revert", rows=affected, rationale=rationale, intent=Intent.REVERT,
+                                note=nc_note)
+        if choice in ("o", "override"):
             ans = prompt("Type 'override' to apply despite the warning (this is recorded): ").strip()
             if ans != "override":
+                ctx.review("cancel", affected)
                 out("Cancelled. Nothing applied.")
                 return finish(AckOutcome.CANCELLED, check, warn_texts)
-            pending_outcome = AckOutcome.OVERRIDE_APPLIED
-        else:
-            out("Cancelled. Nothing applied.")
-            return finish(AckOutcome.CANCELLED, check, warn_texts)
+            rationale = _ask_rationale(ctx)
+            if rationale is None:
+                ctx.review("cancel", affected)
+                return finish(AckOutcome.CANCELLED, check, warn_texts, note="no rationale given")
+            return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.OVERRIDE_APPLIED,
+                                decision="override", rows=affected, rationale=rationale, note=nc_note)
+        ctx.review("cancel", affected)
+        out("Cancelled. Nothing applied.")
+        return finish(AckOutcome.CANCELLED, check, warn_texts)
 
+    if not_checked:
+        out(f"No supported emergency changes are reversed by this plan, but {len(not_checked)} "
+            "change(s) were NOT CHECKED (listed above).")
     else:
-        if not_checked:
-            out(f"No supported emergency changes are reversed by this plan, but {len(not_checked)} "
-                "change(s) were NOT CHECKED (listed above).")
-        else:
-            out("No open emergency changes are reversed by this plan (within the coverage above).")
-        ans = prompt("Type 'yes' to apply this exact saved plan: ").strip().lower()
-        if ans != "yes":
-            out("Cancelled. Nothing applied.")
-            return finish(AckOutcome.CANCELLED, check, warn_texts, note=nc_note)
-
-    return _apply_exact(tf, plan_hash, cfg_hash, workspace, out, finish, check, warn_texts,
-                        pending_outcome, note=nc_note)
+        out("No open emergency changes are reversed by this plan (within the coverage above).")
+    ans = prompt("Type 'yes' to apply this exact saved plan: ").strip().lower()
+    if ans != "yes":
+        out("Cancelled. Nothing applied.")
+        return finish(AckOutcome.CANCELLED, check, warn_texts, note=nc_note)
+    return _apply_exact(ctx, cfg_hash, workspace, finish, check, warn_texts, AckOutcome.APPLIED_NO_WARNINGS,
+                        decision="apply", rows=[], note=nc_note)
 
 
-def _apply_exact(tf: Terraform, plan_hash, cfg_hash, workspace, out, finish, check, warn_texts,
-                 outcome: AckOutcome, note: str | None = None) -> ApplyOutcome:
+def _apply_exact(ctx: _Ctx, cfg_hash, workspace, finish, check, warn_texts, outcome: AckOutcome, *,
+                 decision: str, rows, rationale: str | None = None, intent: Intent | None = None,
+                 note: str | None = None) -> ApplyOutcome:
+    tf, out = ctx.tf, ctx.out
     # Integrity: the artifact and context must be exactly what was reviewed.
     try:
-        unchanged = (plan_hash is not None and tf.plan_hash(APPLY_PLAN) == plan_hash
+        unchanged = (ctx.plan_hash is not None and tf.plan_hash(APPLY_PLAN) == ctx.plan_hash
                      and tf.config_hash() == cfg_hash and tf.workspace() == workspace)
     except (TerraformError, OSError):
         unchanged = False
@@ -250,7 +392,15 @@ def _apply_exact(tf: Terraform, plan_hash, cfg_hash, workspace, out, finish, che
         out("ABORTED: plan file, config, or workspace changed since review. Re-run `breakglass apply` to replan.")
         return finish(AckOutcome.ABORTED_PLAN_CHANGED, check, warn_texts, note=note)
 
+    # PRD R7: persist the decision (linked to this exact plan) BEFORE terraform runs.
+    try:
+        ctx.review(decision, rows, intent=intent, rationale=rationale, start_run=True)
+    except Exception as e:
+        out(f"ERROR: could not save the review decision ({type(e).__name__}). Nothing applied.")
+        return finish(AckOutcome.FAILED, check, warn_texts, note="decision could not be persisted; not applied")
+
     out(RACE_NOTE)
+    ctx.apply_started = True
     try:
         code = tf.apply_saved(APPLY_PLAN)
     except (KeyboardInterrupt, TerraformError, OSError) as e:
