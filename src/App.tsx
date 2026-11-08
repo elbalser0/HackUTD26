@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usingFixtures } from "./api";
+import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
 import { AdminArea } from "./components/Admin";
 import { ApplyRunView } from "./components/ApplyRunView";
 import { RecordDetail } from "./components/RecordDetail";
@@ -29,6 +30,8 @@ function App() {
         ? "Record"
         : "Open records";
   return (
+    <AuthProvider>
+    <AuthGate>
     <div className="app">
       <a className="skip" href="#main">
         Skip to content
@@ -75,8 +78,11 @@ function App() {
             </span>
             <span className="crumb-current">{crumb}</span>
           </span>
-          <span className="badge">
-            {usingFixtures ? "DEV FIXTURE DATA — NOT A BACKEND" : "LIVE API"}
+          <span className="header-right">
+            <span className="badge">
+              {usingFixtures ? "DEV FIXTURE DATA — NOT A BACKEND" : "LIVE API"}
+            </span>
+            <AccountBar />
           </span>
         </header>
         <main id="main">
@@ -91,11 +97,17 @@ function App() {
           )}
         </main>
         <footer>
-          <span>Reasons are self-reported, not verified authorship.</span>
+          <span>
+            Explanations saved while signed in show which Google account
+            submitted them, never who made the console change. Otherwise they
+            are self-reported.
+          </span>
           <span>Independent hackathon project. Not affiliated with NMC².</span>
         </footer>
       </div>
     </div>
+    </AuthGate>
+    </AuthProvider>
   );
 }
 export default App;

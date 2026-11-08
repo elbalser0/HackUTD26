@@ -759,3 +759,172 @@ select:focus-visible {
     margin-left: 12px;
   }
 }
+
+/* ---- Google sign-in -------------------------------------------------------- */
+.signin-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 16px;
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(43, 156, 252, 0.16), transparent 60%),
+    radial-gradient(700px 420px at -10% 110%, rgba(43, 156, 252, 0.1), transparent 60%),
+    #08090b;
+}
+.signin-card {
+  width: 100%;
+  max-width: 560px;
+  padding: 44px 44px 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(16, 18, 22, 0.92);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+.signin-mark {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -4px;
+  line-height: 1;
+  margin-bottom: 26px;
+}
+.signin-mark span {
+  color: var(--accent);
+}
+.signin-card h1 {
+  font-size: clamp(32px, 5vw, 46px);
+  margin: 18px 0 16px;
+}
+.signin-card h1 span {
+  color: var(--muted);
+}
+.signin-card .lede {
+  font-size: 14px;
+  margin-bottom: 28px;
+}
+.signin-points {
+  margin: 26px 0 22px;
+  padding: 18px 0 0 18px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.signin-checking {
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.linkish {
+  background: none;
+  color: #87c8ff;
+  padding: 0;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.gbtn-wrap {
+  display: grid;
+  gap: 10px;
+}
+.gbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 4px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 14px;
+  font-weight: 500;
+  justify-self: start;
+}
+.gbtn:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+.gmark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+.account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  background: var(--accent);
+  color: #07111b;
+  font-size: 12px;
+  font-weight: 700;
+  object-fit: cover;
+}
+.account-who {
+  display: grid;
+  line-height: 1.3;
+  min-width: 0;
+}
+.account-who strong {
+  color: #f4f6fa;
+  font-size: 13px;
+  font-weight: 500;
+}
+.account-who small,
+.account-state {
+  color: var(--muted);
+  font-size: 11px;
+}
+.verified {
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #8fe3b0;
+  border: 1px solid #23573a;
+  background: #0d2016;
+  padding: 6px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.account-out-btn {
+  padding: 8px 14px;
+}
+.account .gbtn {
+  min-height: 36px;
+  font-size: 13px;
+  padding: 0 14px;
+}
+
+@media (max-width: 760px) {
+  .signin-card {
+    padding: 32px 22px 26px;
+  }
+  .account-who,
+  .verified,
+  .account-state {
+    display: none;
+  }
+  .account {
+    padding-left: 10px;
+    gap: 8px;
+  }
+  .account-out-btn,
+  .account .gbtn {
+    min-height: 44px;
+  }
+}

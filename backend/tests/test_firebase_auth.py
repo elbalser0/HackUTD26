@@ -215,3 +215,27 @@ def test_real_verifier_rejects_wrong_issuer(monkeypatch):
                                          "iss": "https://securetoken.google.com/other", "aud": PROJECT})
     with pytest.raises(auth.InvalidToken):
         auth.firebase_verifier(PROJECT)("abc")
+
+
+# ---- distinct error codes, so the UI can say the right thing -------------------
+
+def _code(r):
+    return r.status_code, r.json()["error"]["code"]
+
+
+def test_write_error_codes(db):
+    rid = rid_of(db)
+    with make_client(db) as c:
+        url = f"/api/records/{rid}/report"
+        assert _code(c.post(url, json={"reason": "x"})) == (401, "sign_in_required")
+        assert _code(c.post(url, json={"reason": "x"}, headers=bearer("bad"))) == (401, "sign_in_invalid")
+        assert _code(c.post(url, json={"reason": "x"}, headers=bearer("tok-unverified"))) == (403, "email_unverified")
+
+
+def test_admin_error_codes(db):
+    with make_client(db) as c:
+        assert _code(c.get("/api/admin/log")) == (401, "unauthorized")
+        assert _code(c.get("/api/admin/log", headers=bearer("tok-dana"))) == (403, "not_admin")
+        assert _code(c.get("/api/admin/log", headers=bearer("tok-unverified"))) == (403, "email_unverified")
+    with make_client(db, firebase=False, admin_token="") as c:
+        assert _code(c.get("/api/admin/log", headers=bearer("x"))) == (403, "admin_not_configured")

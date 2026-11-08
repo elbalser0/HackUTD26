@@ -8,11 +8,13 @@ import {
   formatDetected,
   observedText,
 } from "../format";
+import { useAuth } from "../auth";
 import { useAsync } from "../useAsync";
 import { ErrorState, Loading, Notice } from "./States";
 
 export function RecordList() {
   const { s, reload } = useAsync(() => api.listRecords(), []);
+  const auth = useAuth();
   return (
     <section className="detail">
       <div className="eyebrow">OPEN RECORDS</div>
@@ -29,6 +31,12 @@ export function RecordList() {
       {s.state === "ok" && (
         <>
           <Freshness health={s.data.health} records={s.data.records} />
+          {s.data.health?.auth?.writesRequireSignIn && !auth.user && (
+            <Notice tone="info">
+              Sign in with Google to add explanations: this server records
+              which account submitted each one.
+            </Notice>
+          )}
           {s.data.records.length === 0 ? (
             <p className="state">
               No open records. This is not proof nothing changed: the scanner

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { api } from "../api";
+import { ApiError, api } from "../api";
+import { useAuth } from "../auth";
 import type { EmergencyRecord, Intent } from "../api";
 import {
   age,
@@ -85,6 +86,28 @@ function Detail({
   );
 }
 
+/** Explains sign-in failures; anything else falls back to the server message. */
+function writeError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 401)
+      return "Sign-in required or expired. Sign in with Google again, then retry.";
+    if (err.status === 403 && err.code === "email_unverified")
+      return "This Google account's email isn't verified, so the server refused it.";
+  }
+  return err instanceof Error ? err.message : "unknown error";
+}
+
+function SavingAs() {
+  const { user } = useAuth();
+  if (!user) return null;
+  return (
+    <p className="meta">
+      Saving as <strong>{user.email}</strong> (verified Google sign-in; not
+      proof of who made the change).
+    </p>
+  );
+}
+
 function ReportForm({
   r,
   onSaved,
@@ -117,7 +140,7 @@ function ReportForm({
     } catch (err) {
       setMsg({
         ok: false,
-        text: `Not saved: ${err instanceof Error ? err.message : "unknown error"}. Your text is still here; retry.`,
+        text: `Not saved: ${writeError(err)} Your text is still here.`,
       });
     } finally {
       setBusy(false);
@@ -127,6 +150,7 @@ function ReportForm({
   return (
     <form onSubmit={submit} className="form" aria-label="Report this change">
       <h3>{r.reason !== null ? "Update your report" : "Report this change"}</h3>
+      <SavingAs />
       <label>
         Your name (optional)
         <input
@@ -183,7 +207,7 @@ function Decision({
     try {
       onChange(await api.decide(r.id, i));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "unknown error");
+      setErr(writeError(e));
     } finally {
       setBusy(false);
     }

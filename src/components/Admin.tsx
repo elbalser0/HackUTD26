@@ -2,67 +2,114 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, api } from "../api";
 import type { AdminEvent, AdminFilters, RunOutcome } from "../api";
+import { useAuth } from "../auth";
 import { formatDetected } from "../format";
 import { useAsync } from "../useAsync";
 import { ErrorState, Loading, Notice } from "./States";
 
-type Denied = "rejected" | "unconfigured" | null;
+type Denied =
+  | "rejected"
+  | "unconfigured"
+  | "not_admin"
+  | "email_unverified"
+  | null;
+
+/** How the admin view authenticates: Google sign-in (fresh ID token per call) or the shared fallback token. */
+type Cred = { kind: "google"; email: string } | { kind: "shared"; token: string };
 
 /**
- * R9 admin area. The bearer token is held in this component's React state only:
- * never in the URL, localStorage or sessionStorage. A reload asks again. The
- * server is what enforces access; this gate only decides when to send the token.
+ * R9 admin area. A shared token is held in this component's React state only:
+ * never in the URL, localStorage or sessionStorage. A reload asks again. With
+ * Google sign-in, a fresh Firebase ID token is fetched for every request and
+ * never stored by this app. The server enforces access; this gate only decides
+ * which credential to send.
  */
 export function AdminArea({ path }: { path: string }) {
-  const [token, setToken] = useState<string | null>(null);
+  const auth = useAuth();
+  const [chosen, setCred] = useState<Cred | null>(null);
+  const [lastKind, setLastKind] = useState<Cred["kind"]>("shared");
   const [denied, setDenied] = useState<Denied>(null);
   const timeline = path.match(/^\/admin\/records\/([^/]+)$/);
 
-  if (token === null) {
+  // A Google unlock belongs to the account that chose it: signing out, or a
+  // different account signing in, locks the view (derived, no effect needed).
+  const cred: Cred | null =
+    chosen?.kind === "google" && chosen.email !== auth.user?.email ? null : chosen;
+
+  if (cred === null) {
     return (
       <TokenGate
         denied={denied}
-        onToken={(t) => {
+        deniedKind={lastKind}
+        onCred={(c) => {
           setDenied(null);
-          setToken(t);
+          setLastKind(c.kind);
+          setCred(c);
         }}
       />
     );
   }
+  const getToken = async (): Promise<string> => {
+    if (cred.kind === "shared") return cred.token;
+    const t = await auth.getIdToken();
+    if (!t) throw new ApiError("Not signed in", 401, "sign_in_required");
+    return t;
+  };
+  const credKey = cred.kind === "shared" ? "shared" : `google:${cred.email}`;
   const onDenied = (code: Exclude<Denied, null>) => {
-    setToken(null);
+    setCred(null);
     setDenied(code);
   };
   const lock = () => {
-    setToken(null);
+    setCred(null);
     setDenied(null);
   };
   return timeline ? (
     <TimelineView
       key={timeline[1]}
-      token={token}
+      getToken={getToken}
+      credKey={credKey}
       id={decodeURIComponent(timeline[1])}
       onDenied={onDenied}
       onLock={lock}
     />
   ) : (
-    <LogView token={token} onDenied={onDenied} onLock={lock} />
+    <LogView getToken={getToken} credKey={credKey} onDenied={onDenied} onLock={lock} />
   );
 }
 
 function TokenGate({
   denied,
-  onToken,
+  deniedKind,
+  onCred,
 }: {
   denied: Denied;
-  onToken: (t: string) => void;
+  deniedKind: Cred["kind"];
+  onCred: (c: Cred) => void;
 }) {
+  const auth = useAuth();
   const [value, setValue] = useState("");
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (value.trim()) onToken(value.trim());
+    if (value.trim()) onCred({ kind: "shared", token: value.trim() });
     setValue("");
   };
+  const tokenForm = (
+    <form className="form" onSubmit={submit}>
+      <label>
+        Admin token
+        <input
+          type="password"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+        />
+      </label>
+      <button className="btn primary" type="submit">
+        Unlock
+      </button>
+    </form>
+  );
   return (
     <section className="detail">
       <div className="eyebrow">ADMIN</div>
@@ -72,15 +119,39 @@ function TokenGate({
         <span>for authorized admins.</span>
       </h1>
       <p className="lede">
-        Enter the admin token to read the log. It is sent only as a request
-        header, kept in this tab&rsquo;s memory, and forgotten on reload or
-        sign-out. The server decides who may read; this page cannot grant
-        access.
+        {auth.configured
+          ? "Continue with an admin Google account, or use the shared admin token as an offline fallback. "
+          : "Enter the admin token to read the log. "}
+        Credentials are sent only as a request header, kept in this tab&rsquo;s
+        memory, and forgotten on reload or sign-out. The server decides who may
+        read; this page cannot grant access.
       </p>
       {denied === "rejected" && (
         <div role="alert" className="state state-error">
-          <strong>Token rejected.</strong> The server did not accept it. Check
-          it and try again. Nothing was loaded.
+          {deniedKind === "google" ? (
+            <>
+              <strong>Google sign-in rejected or expired.</strong> Sign in
+              again and retry. Nothing was loaded.
+            </>
+          ) : (
+            <>
+              <strong>Token rejected.</strong> The server did not accept it.
+              Check it and try again. Nothing was loaded.
+            </>
+          )}
+        </div>
+      )}
+      {denied === "not_admin" && (
+        <div role="alert" className="state state-error">
+          <strong>This Google account is not an admin.</strong> The server
+          accepted the sign-in but this email is not on its admin list. Nothing
+          was loaded.
+        </div>
+      )}
+      {denied === "email_unverified" && (
+        <div role="alert" className="state state-error">
+          <strong>This Google account&rsquo;s email isn&rsquo;t verified.</strong>{" "}
+          The server refuses unverified accounts. Nothing was loaded.
         </div>
       )}
       {denied === "unconfigured" && (
@@ -90,20 +161,32 @@ function TokenGate({
           was loaded.
         </div>
       )}
-      <form className="form" onSubmit={submit}>
-        <label>
-          Admin token
-          <input
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-          />
-        </label>
-        <button className="btn primary" type="submit">
-          Unlock
-        </button>
-      </form>
+      {auth.configured ? (
+        <>
+          <div className="form">
+            {auth.user ? (
+              <button
+                className="btn primary"
+                onClick={() => auth.user && onCred({ kind: "google", email: auth.user.email })}
+              >
+                Continue as {auth.user.email}
+              </button>
+            ) : (
+              <button className="btn primary" onClick={() => void auth.signIn()}>
+                Sign in with Google
+              </button>
+            )}
+          </div>
+          <h3>Offline fallback: shared admin token</h3>
+          <p className="meta">
+            For when Google sign-in is unavailable. It shows that an admin read
+            the log, not which admin.
+          </p>
+          {tokenForm}
+        </>
+      ) : (
+        tokenForm
+      )}
     </section>
   );
 }
@@ -132,17 +215,26 @@ function useDeny(
   const status = e?.status;
   useEffect(() => {
     if (status === 401) onDenied("rejected");
-    if (status === 403) onDenied("unconfigured");
+    if (status === 403)
+      onDenied(
+        e?.code === "not_admin"
+          ? "not_admin"
+          : e?.code === "email_unverified"
+            ? "email_unverified"
+            : "unconfigured",
+      );
     // eslint-disable-next-line
   }, [status]);
 }
 
 function LogView({
-  token,
+  getToken,
+  credKey,
   onDenied,
   onLock,
 }: {
-  token: string;
+  getToken: () => Promise<string>;
+  credKey: string;
   onDenied: (c: Exclude<Denied, null>) => void;
   onLock: () => void;
 }) {
@@ -155,8 +247,8 @@ function LogView({
   });
   const [applied, setApplied] = useState<AdminFilters>({});
   const { s, reload } = useAsync(
-    () => api.adminLog(token, applied),
-    [token, applied],
+    () => getToken().then((t) => api.adminLog(t, applied)),
+    [credKey, applied],
   );
   useDeny(s, onDenied);
   const set = (k: keyof typeof draft) => (e: { target: { value: string } }) =>
@@ -185,7 +277,7 @@ function LogView({
       </h1>
       <div className="row">
         <button className="btn" onClick={onLock}>
-          Sign out
+          Lock admin view
         </button>
       </div>
       <form className="form" onSubmit={apply} aria-label="Filters">
@@ -262,19 +354,21 @@ function LogView({
 }
 
 function TimelineView({
-  token,
+  getToken,
+  credKey,
   id,
   onDenied,
   onLock,
 }: {
-  token: string;
+  getToken: () => Promise<string>;
+  credKey: string;
   id: string;
   onDenied: (c: Exclude<Denied, null>) => void;
   onLock: () => void;
 }) {
   const { s, reload } = useAsync(
-    () => api.adminTimeline(token, id),
-    [token, id],
+    () => getToken().then((t) => api.adminTimeline(t, id)),
+    [credKey, id],
   );
   useDeny(s, onDenied);
   const denied =
@@ -288,7 +382,7 @@ function TimelineView({
       <h1 className="resource">{id}</h1>
       <div className="row">
         <button className="btn" onClick={onLock}>
-          Sign out
+          Lock admin view
         </button>
       </div>
       {s.state === "loading" && <Loading what="timeline" />}

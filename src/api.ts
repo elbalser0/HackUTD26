@@ -55,11 +55,20 @@ export interface EmergencyRecord {
   evidenceSource: string;
 }
 
+export interface HealthAuth {
+  /** Server requires a Google sign-in for report/decision. */
+  writesRequireSignIn: boolean;
+  adminViaFirebase: boolean;
+  adminViaSharedToken: boolean;
+}
+
 export interface Health {
   status: string;
   db: string;
   environment: string;
   time: string;
+  /** Sign-in configuration; null when the server doesn't report it. */
+  auth?: HealthAuth | null;
 }
 
 export interface RecordList {
@@ -307,6 +316,20 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * Supplies a fresh Firebase ID token for writes (set by AuthProvider), or null
+ * when nobody is signed in. Called per request, never cached here.
+ */
+let tokenProvider: (() => Promise<string | null>) | null = null;
+export function setTokenProvider(fn: (() => Promise<string | null>) | null) {
+  tokenProvider = fn;
+}
+async function signedInHeaders(): Promise<Record<string, string>> {
+  const t = tokenProvider ? await tokenProvider() : null;
+  // Bearer header only: an ID token is never put in a URL.
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 async function getHealth(): Promise<Health | null> {
   try {
     const res = await raw("/health");
@@ -317,6 +340,13 @@ async function getHealth(): Promise<Health | null> {
       db: w.db,
       environment: w.environment,
       time: w.time,
+      auth: w.auth
+        ? {
+            writesRequireSignIn: w.auth.writes_require_sign_in === true,
+            adminViaFirebase: w.auth.admin_via_firebase === true,
+            adminViaSharedToken: w.auth.admin_via_shared_token === true,
+          }
+        : null,
     };
   } catch {
     return null;
@@ -338,6 +368,7 @@ const realAdapter: Adapter = {
     return fromWireRecord(
       await http(`/records/${encodeURIComponent(id)}/report`, {
         method: "POST",
+        headers: await signedInHeaders(),
         body: JSON.stringify({
           reporter: b.reporter,
           reason: b.reason,
@@ -350,6 +381,7 @@ const realAdapter: Adapter = {
     return fromWireRecord(
       await http(`/records/${encodeURIComponent(id)}/decision`, {
         method: "POST",
+        headers: await signedInHeaders(),
         body: JSON.stringify({ intent, ...(note ? { note } : {}) }),
       }),
     );

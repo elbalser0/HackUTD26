@@ -14,6 +14,27 @@ Branch: `feat/break-glass-ui`. Stack: React + TS + Vite + Vitest. Contract: `doc
 - [x] Mobile layout check at 375px and 320px (fixture data): no horizontal overflow; tap targets >= 44px; breadcrumb shows the current page; back link spaced from the eyebrow
 - [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) built at `#/admin`: token held in memory only, never in URL or storage; verified with stub adapters and fixture data (`?fixture`, token `demo`), not against the real backend
 
+## Google sign-in (Firebase)
+
+- **Where the code lives:**
+  - `src/auth.ts` is the only module that talks to Firebase. It's loaded lazily, as its own build chunk.
+  - `src/components/AuthProvider.tsx` holds the provider and the sidebar control.
+  - `src/api.ts` `setTokenProvider` adds `Authorization: Bearer <ID token>` to **writes only** (report, decision). Reads never send it.
+- **Enabled only when** all four `VITE_FIREBASE_*` values are set, in a gitignored `.env.local`; see `.env.example`. These are public identifiers. Without them, or with `?fixture`, no sign-in UI renders and requests are unchanged.
+- **Session:** lasts until the tab closes (`browserSessionPersistence`), and the Firebase SDK holds it. The app never stores an ID token. It fetches a fresh one before **each** request, which handles the hourly expiry.
+- **Admin page:**
+  - **Continue as <email>:** a fresh token per call. It's tied to that account, so signing out or switching accounts locks the view.
+  - **Offline fallback:** the shared admin token.
+  - The view's lock button is labeled "Lock admin view" so it can't be mistaken for "Sign out".
+- **Errors shown:**
+  - `401`: "sign in again". The typed text is kept.
+  - `403 email_unverified`: "email isn't verified".
+  - `403 not_admin`: "not an admin".
+  - `403 admin_not_configured`: "not configured".
+- **Honesty:** a signed-in save shows "Saving as <email> (verified Google sign-in; not proof of who made the change)".
+- **Rollout:** set `BG_FIREBASE_PROJECT_ID` (and `BG_ADMIN_EMAILS`) on the operator machine only after this UI is merged, so the forms never get `401`.
+- **Tests:** `src/auth.test.tsx` uses a fake auth client (no real Google). Mutation checks cover the Bearer header, a fresh token per write, and `not_admin` vs `not configured`.
+
 ## Running
 
 Backend: see docs/API.md (`breakglass seed-demo --with-report`, `uvicorn breakglass.api:app --port 8000`).
