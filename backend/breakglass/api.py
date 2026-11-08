@@ -29,6 +29,8 @@ from .models import (
     DecisionIn,
     EventList,
     HealthOut,
+    MeOut,
+    OverviewOut,
     RecordList,
     RecordOut,
     ReportIn,
@@ -153,6 +155,20 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
         except auth.NotAllowed:
             raise AuthDenied(403, "email_unverified", "a verified email is required") from None
 
+    def is_admin_email(email: str | None) -> bool:
+        """The one admin rule used by both /api/me (persona) and require_admin (enforcement)."""
+        return verify is not None and bool(email) and email in admins
+
+    def require_reader(request: Request) -> None:
+        """Reads: open when Firebase is not configured (offline demo). Otherwise any verified
+        sign-in (employee or admin) or the shared admin token."""
+        if verify is None:
+            return
+        supplied = auth.bearer_token(request.headers.get("authorization"))
+        if supplied is not None and auth.is_shared_admin_token(supplied, token):
+            return
+        signed_in(request)
+
     def require_admin(request: Request) -> None:
         """Server-side gate for /api/admin/*: the shared token (offline fallback) OR a
         Firebase sign-in whose verified email is allowlisted. Fails closed."""
@@ -172,7 +188,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
             raise AuthDenied(401, "unauthorized", "admin credentials required") from None
         except auth.NotAllowed:
             raise AuthDenied(403, "email_unverified", "a verified email is required") from None
-        if who.email not in admins:
+        if not is_admin_email(who.email):
             raise AuthDenied(403, "not_admin", "this account is not an admin")
 
     def _aware(name: str, raw: str | None) -> datetime | None:
@@ -186,14 +202,35 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
             raise service.BadInput(f"{name}: timezone required (e.g. a trailing Z)")
         return parsed
 
+    @app.get("/api/me", response_model=MeOut)
+    def me(request: Request):
+        """Which persona the UI should show. Display only: every route enforces access itself."""
+        supplied = auth.bearer_token(request.headers.get("authorization"))
+        if supplied is not None and auth.is_shared_admin_token(supplied, token):
+            return MeOut(signed_in=False, email=None, display_name=None, role="admin", auth_mode="shared-token")
+        if verify is None:
+            return MeOut(signed_in=False, email=None, display_name=None, role=None, auth_mode="none")
+        if supplied is None:
+            return MeOut(signed_in=False, email=None, display_name=None, role=None, auth_mode="firebase")
+        who = signed_in(request)
+        return MeOut(signed_in=True, email=who.email, display_name=who.name,
+                     role="admin" if is_admin_email(who.email) else "employee", auth_mode="firebase")
+
     @app.get("/api/admin/log", response_model=AdminLogOut, dependencies=[Depends(require_admin)])
     def admin_log(engineer: str | None = Query(default=None, max_length=100),
                   resource: str | None = Query(default=None, max_length=300),
                   since: str | None = Query(default=None), until: str | None = Query(default=None),
                   outcome: RunOutcome | None = Query(default=None),
+                  event_type: str | None = Query(default=None, alias="type", max_length=40),
                   limit: int = Query(default=100, ge=1, le=500)):
+        if event_type is not None and event_type not in admin.EVENT_TYPES:
+            raise service.BadInput("type: must be one of " + ", ".join(admin.EVENT_TYPES))
         return admin.log(database(), engineer=engineer, resource=resource, since=_aware("since", since),
-                         until=_aware("until", until), outcome=outcome, limit=limit)
+                         until=_aware("until", until), outcome=outcome, event_type=event_type, limit=limit)
+
+    @app.get("/api/admin/overview", response_model=OverviewOut, dependencies=[Depends(require_admin)])
+    def admin_overview(window: str = Query(default="24h", pattern="^(24h|7d)$")):
+        return admin.overview(database(), window=window, now=utcnow(), environment=settings.environment)
 
     @app.get("/api/admin/records/{record_id}/timeline", response_model=TimelineOut,
              dependencies=[Depends(require_admin)])
@@ -216,6 +253,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
                          terraform_dir_configured=settings.tf_dir is not None, time=utcnow(),
                          last_scan_at=None, last_scan_status=None,
                          auth={"firebase_project_id": project, "writes_require_sign_in": verify is not None,
+                               "reads_require_sign_in": verify is not None,
                                "admin_via_firebase": verify is not None and bool(admins),
                                "admin_via_shared_token": bool(token)})
         if last is not None:
@@ -227,17 +265,17 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
                 pass  # malformed row: report no scan age rather than failing health
         return JSONResponse(status_code=code, content=json.loads(body.model_dump_json()))
 
-    @app.get("/api/records", response_model=RecordList)
+    @app.get("/api/records", response_model=RecordList, dependencies=[Depends(require_reader)])
     def list_records(resolution: Resolution | None = Query(default=None)):
         rows = database().list_records(resolution=resolution.value if resolution else None)
-        return RecordList(records=[service.record_out(r) for r in rows])
+        return RecordList(records=service.records_out(database(), rows))
 
-    @app.get("/api/records/{record_id}", response_model=RecordOut)
+    @app.get("/api/records/{record_id}", response_model=RecordOut, dependencies=[Depends(require_reader)])
     def get_record(record_id: str):
         row = database().get_record(record_id)
         if row is None:
             raise service.NotFound(f"record {record_id} not found")
-        return service.record_out(row)
+        return service.records_out(database(), [row])[0]
 
     @app.post("/api/records/{record_id}/report", response_model=RecordOut)
     def post_report(record_id: str, body: ReportIn, request: Request):
@@ -254,25 +292,25 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
             return service.decide(database(), record_id, body)
         return service.decide(database(), record_id, body, actor=who.email, assurance=auth.VERIFIED_ASSURANCE)
 
-    @app.get("/api/records/{record_id}/events", response_model=EventList)
+    @app.get("/api/records/{record_id}/events", response_model=EventList, dependencies=[Depends(require_reader)])
     def record_events(record_id: str):
         """Append-only history for one record: reports, decisions, wrapper reviews (PRD R6/R10)."""
         if database().get_record(record_id) is None:
             raise service.NotFound(f"record {record_id} not found")
         return EventList(events=[service.event_out(e) for e in database().list_events(record_id=record_id)])
 
-    @app.get("/api/apply-runs/{run_id}/events", response_model=EventList)
+    @app.get("/api/apply-runs/{run_id}/events", response_model=EventList, dependencies=[Depends(require_reader)])
     def run_events(run_id: str):
         """Reviews, run_started and run_finished events for one wrapper run (PRD R7/R8)."""
         if database().get_apply_run(run_id) is None:
             raise service.NotFound(f"apply run {run_id} not found")
         return EventList(events=[service.event_out(e) for e in database().list_events(run_id=run_id)])
 
-    @app.get("/api/apply-runs", response_model=ApplyRunList)
+    @app.get("/api/apply-runs", response_model=ApplyRunList, dependencies=[Depends(require_reader)])
     def list_apply_runs(limit: int = Query(default=20, ge=1, le=100)):
         return ApplyRunList(apply_runs=[apply_run_out(r) for r in database().list_apply_runs(limit)])
 
-    @app.get("/api/apply-runs/{run_id}", response_model=ApplyRunOut)
+    @app.get("/api/apply-runs/{run_id}", response_model=ApplyRunOut, dependencies=[Depends(require_reader)])
     def get_apply_run(run_id: str):
         row = database().get_apply_run(run_id)
         if row is None:

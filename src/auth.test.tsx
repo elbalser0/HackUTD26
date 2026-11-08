@@ -373,9 +373,31 @@ test("writes send a fresh Firebase ID token as a Bearer header, never in the URL
   expect(calls.every((c) => !c.url.includes("idtok"))).toBe(true);
 });
 
-test("reads never send the ID token", async () => {
+test("reads send the ID token too (the server requires sign-in for reads), never in the URL", async () => {
   const calls = fetchStub();
-  setTokenProvider(async () => "idtok-read");
+  let n = 0;
+  setTokenProvider(async () => `idtok-read-${++n}`);
+  await api.getRecord("r1");
+  await api.getApplyRun("r1");
+  const records = calls.filter((c) => c.url.startsWith("/api/records"));
+  expect(records.map(authHeader)).toEqual(["Bearer idtok-read-1"]);
+  expect(calls.map(authHeader)).toContain("Bearer idtok-read-2");
+  expect(calls.every((c) => !c.url.includes("idtok"))).toBe(true);
+});
+
+test("listRecords sends the ID token on the records read but not on the open health check", async () => {
+  const calls = fetchStub();
+  setTokenProvider(async () => "idtok-list");
+  await api.listRecords();
+  const rec = calls.find((c) => c.url.startsWith("/api/records"));
+  const health = calls.find((c) => c.url.startsWith("/api/health"));
+  expect(rec && authHeader(rec)).toBe("Bearer idtok-list");
+  expect(health && authHeader(health)).toBeNull();
+});
+
+test("signed out (no token): reads send no Authorization header", async () => {
+  const calls = fetchStub();
+  setTokenProvider(async () => null);
   await api.getRecord("r1");
   expect(authHeader(calls[0])).toBeNull();
 });
@@ -405,12 +427,13 @@ test("the app's wiring fetches a NEW token for every write (never caches one)", 
   setAuthClient(auth);
   render(<App />);
   await waitFor(() => expect(calls.length).toBeGreaterThan(0));
+  const before = auth.getIdToken.mock.calls.length; // the initial records read also asks for a token
   await api.report("r1", { reporter: null, reason: "first" });
   await api.decide("r1", "keep");
   const posts = calls.filter((c) => c.init?.method === "POST").map(authHeader);
   expect(posts).toHaveLength(2);
   expect(new Set(posts).size).toBe(2);
-  expect(auth.getIdToken).toHaveBeenCalledTimes(2);
+  expect(auth.getIdToken.mock.calls.length - before).toBe(2);
 });
 
 // ---- admin page ---------------------------------------------------------------
