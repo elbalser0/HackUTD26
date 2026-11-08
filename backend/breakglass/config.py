@@ -39,6 +39,24 @@ class Settings:
     # Set = web writes require sign-in; admin log also accepts listed admin emails.
     firebase_project_id: str | None = None
     admin_emails: tuple[str, ...] = ()
+    # PostgreSQL / Tiger Cloud DSN. Secret: never logged, echoed or committed. Unset = explicit SQLite mode.
+    database_url: str | None = field(default=None, repr=False)
+
+
+def _database_url(raw: str | None) -> str | None:
+    """BG_DATABASE_URL selects PostgreSQL (Tiger Cloud). Validation errors never echo the value."""
+    from urllib.parse import urlsplit
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        u = urlsplit(raw)
+        ok = u.scheme in ("postgresql", "postgres") and bool(u.hostname) and u.path.strip("/") != ""
+    except ValueError:
+        ok = False
+    if not ok:
+        raise ConfigError("BG_DATABASE_URL must look like postgresql://user:password@host:port/dbname (value hidden)")
+    return raw
 
 
 def _resolve_tf_dir(raw: str | None) -> Path | None:
@@ -71,4 +89,5 @@ def load_settings() -> Settings:
         firebase_project_id=(os.environ.get("BG_FIREBASE_PROJECT_ID") or "").strip() or None,
         admin_emails=tuple(e.strip().lower() for e in os.environ.get("BG_ADMIN_EMAILS", "").split(",")
                            if e.strip()),
+        database_url=_database_url(os.environ.get("BG_DATABASE_URL")),
     )

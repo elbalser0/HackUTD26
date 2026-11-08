@@ -205,8 +205,14 @@ class Database:
         assignments = ", ".join(f"{k} = ?" for k in fields)
         (conn.execute if conn else self._x)(f"UPDATE records SET {assignments} WHERE id = ?", [*fields.values(), record_id])
 
-    def get_record(self, record_id: str) -> sqlite3.Row | None:
-        return self._one("SELECT * FROM records WHERE id = ?", (record_id,))
+    def get_record(self, record_id: str, conn: sqlite3.Connection | None = None,
+                   for_update: bool = False) -> sqlite3.Row | None:
+        # for_update: SQLite's BEGIN IMMEDIATE already serializes writers, so there is nothing to lock.
+        sql = "SELECT * FROM records WHERE id = ?"
+        return conn.execute(sql, (record_id,)).fetchone() if conn else self._one(sql, (record_id,))
+
+    def lock_environment(self, conn: sqlite3.Connection, environment: str) -> None:
+        """Serialize scans/guarded workflows per environment. No-op here: BEGIN IMMEDIATE is global."""
 
     def list_records(self, resolution: str | None = None, environment: str | None = None) -> list[sqlite3.Row]:
         q = "SELECT * FROM records WHERE 1=1"
@@ -230,10 +236,20 @@ class Database:
         args = (environment, scope_key)
         return conn.execute(sql, args).fetchall() if conn else self._all(sql, args)
 
+    def open_record_ids(self, environment: str, conn: sqlite3.Connection | None = None) -> list[str]:
+        sql = "SELECT id FROM records WHERE environment = ? AND resolution = 'open' ORDER BY id"
+        rows = conn.execute(sql, (environment,)).fetchall() if conn else self._all(sql, (environment,))
+        return [r["id"] for r in rows]
+
+    def record_environment(self, record_id: str, conn: sqlite3.Connection | None = None) -> str | None:
+        sql = "SELECT environment FROM records WHERE id = ?"
+        row = conn.execute(sql, (record_id,)).fetchone() if conn else self._one(sql, (record_id,))
+        return None if row is None else row["environment"]
+
     # ---- apply runs ----------------------------------------------------
-    def insert_apply_run(self, row: dict[str, Any]) -> None:
+    def insert_apply_run(self, row: dict[str, Any], conn: sqlite3.Connection | None = None) -> None:
         cols = list(row)
-        self._x(
+        (conn.execute if conn else self._x)(
             f"INSERT INTO apply_runs ({', '.join(cols)}) VALUES ({', '.join('?' for _ in cols)})",
             [row[k] for k in cols],
         )
@@ -301,17 +317,34 @@ class Database:
         return self._all("SELECT * FROM apply_runs ORDER BY generated_at ASC, id ASC")
 
     # ---- scans ---------------------------------------------------------
-    def insert_scan(self, scan_id: str, environment: str, started_at: str, status: str, detail: str | None) -> None:
-        self._x(
+    def insert_scan(self, scan_id: str, environment: str, started_at: str, status: str, detail: str | None,
+                    conn: sqlite3.Connection | None = None) -> None:
+        (conn.execute if conn else self._x)(
             "INSERT INTO scans (id, environment, started_at, status, detail) VALUES (?, ?, ?, ?, ?)",
             (scan_id, environment, started_at, status, detail),
         )
+
+    def list_scans(self) -> list[sqlite3.Row]:
+        return self._all("SELECT * FROM scans ORDER BY started_at ASC, id ASC")
 
     def last_scan(self, environment: str) -> sqlite3.Row | None:
         return self._one(
             "SELECT started_at, status FROM scans WHERE environment = ? ORDER BY started_at DESC, id DESC LIMIT 1",
             (environment,),
         )
+
+    backend_name = "sqlite"
+
+    def activity_counts(self, environment: str, since: datetime, until: datetime) -> list[dict[str, Any]]:
+        """Hourly event counts for [since, until) from bounded SQL (offline mode; not a continuous aggregate)."""
+        def dim(k: str) -> str:
+            return (f"CASE WHEN json_type(data_json, '$.{k}') = 'text' THEN json_extract(data_json, '$.{k}') END")
+        rows = self._all(
+            f"SELECT substr(created_at, 1, 13) || ':00:00Z' AS bucket, kind, {dim('intent')} AS intent, "
+            f"{dim('decision')} AS decision, {dim('outcome')} AS outcome, COUNT(*) AS n FROM events "
+            "WHERE environment = ? AND created_at >= ? AND created_at < ? GROUP BY 1, 2, 3, 4, 5",
+            (environment, ts(since), ts(until)))
+        return [dict(r) for r in rows]
 
     def reset(self) -> None:
         with self.tx() as c:

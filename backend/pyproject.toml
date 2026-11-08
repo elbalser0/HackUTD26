@@ -9,6 +9,7 @@ dependencies = [
   "pydantic>=2.8",
   "google-auth>=2.30",  # Firebase ID token verification (project id only; no service account)
   "requests>=2.31",     # transport google-auth uses to fetch Google public keys
+  "psycopg[binary,pool]>=3.2",  # PostgreSQL / Tiger Cloud driver (only used when BG_DATABASE_URL is set)
 ]
 
 [project.optional-dependencies]
@@ -23,6 +24,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["breakglass*"]
+
+[tool.setuptools.package-data]
+breakglass = ["migrations/postgres/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

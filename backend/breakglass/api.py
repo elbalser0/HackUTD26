@@ -19,10 +19,12 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, auth, admin, service
+from . import __version__, analytics, auth, admin, service
 from .config import load_settings
+from .storage import StorageUnavailable, open_database
 from .db import Database
 from .models import (
+    ActivityOut,
     AdminLogOut,
     ApplyRunList,
     ApplyRunOut,
@@ -42,8 +44,8 @@ log = logging.getLogger("breakglass.api")
 
 
 @lru_cache(maxsize=1)
-def get_db() -> Database:
-    return Database(load_settings().db_path)
+def get_db():
+    return open_database(load_settings())
 
 
 class AuthDenied(Exception):
@@ -133,6 +135,11 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
     async def _bad_input(_: Request, exc: service.BadInput):
         return _err(422, "validation_error", str(exc))
 
+    @app.exception_handler(StorageUnavailable)
+    async def _storage(_: Request, exc: StorageUnavailable):
+        log.error("storage unavailable: %s", exc)
+        return _err(503, "storage_unavailable", "the database is unavailable; nothing was recorded")
+
     @app.exception_handler(Exception)
     async def _internal(_: Request, exc: Exception):
         log.exception("unhandled error")  # details to server log only, never to the client
@@ -194,6 +201,11 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
                   limit: int = Query(default=100, ge=1, le=500)):
         return admin.log(database(), engineer=engineer, resource=resource, since=_aware("since", since),
                          until=_aware("until", until), outcome=outcome, limit=limit)
+
+    @app.get("/api/admin/analytics", response_model=ActivityOut, dependencies=[Depends(require_admin)])
+    def admin_analytics(environment: str = Query(min_length=1, max_length=100),
+                        since: str = Query(), until: str = Query()):
+        return analytics.activity(database(), environment, _aware("since", since), _aware("until", until))
 
     @app.get("/api/admin/records/{record_id}/timeline", response_model=TimelineOut,
              dependencies=[Depends(require_admin)])
