@@ -312,3 +312,58 @@ class HealthOut(BaseModel):
     time: datetime
     last_scan_at: datetime | None = None    # most recent scan of this environment, if any
     last_scan_status: str | None = None     # "ok" | "failed" | null when never scanned
+
+
+# --------------------------------------------------------------------------
+# Admin log (R9). Read-only views derived from events, records and apply_runs.
+# --------------------------------------------------------------------------
+
+class RunOutcome(StrEnum):
+    """Run outcome as shown to admins: a terminal AckOutcome, or UNKNOWN.
+    UNKNOWN = no completion was recorded (interrupted, crashed, or still running).
+    It is NOT the same as FAILED and never means success."""
+    UNKNOWN = "unknown"
+    NO_CHANGES = "no_changes"
+    CANCELLED = "cancelled"
+    KEPT = "kept"
+    DEFERRED = "deferred"
+    APPLIED_NO_WARNINGS = "applied_no_warnings"
+    REVERTED_APPLIED = "reverted_applied"
+    OVERRIDE_APPLIED = "override_applied"
+    UNVERIFIED_BYPASS_APPLIED = "unverified_bypass_applied"
+    ABORTED_PLAN_CHANGED = "aborted_plan_changed"
+    FAILED = "failed"
+
+
+class AdminEventOut(BaseModel):
+    at: datetime
+    # change_detected | explained | decision | review | run_started | run_finished | run_unfinished | resolved
+    type: str
+    environment: str
+    record_ids: list[str]
+    run_id: str | None
+    resource_addresses: list[str]
+    actor: str | None
+    actor_assurance: str      # "self-reported" | "local-os-user (not verified)" | "system"
+    outcome: RunOutcome | None  # run_finished / run_unfinished only
+    plan_fingerprint: str | None  # review / run_started: the exact plan that was reviewed
+    detail: str | None
+
+
+class AdminLogOut(BaseModel):
+    events: list[AdminEventOut]
+    total_matching: int
+    limitations: list[str]
+
+
+class TimelineGap(BaseModel):
+    code: str  # no_reason_recorded | no_decision_recorded | no_run_linked | run_outcome_unknown
+    message: str
+    run_id: str | None = None
+
+
+class TimelineOut(BaseModel):
+    record_id: str
+    events: list[AdminEventOut]
+    gaps: list[TimelineGap]
+    limitations: list[str]

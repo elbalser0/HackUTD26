@@ -6,22 +6,24 @@ commands. Those stay in the CLI, driven by a human at a terminal.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 from datetime import datetime
 from functools import lru_cache
 
-from fastapi import FastAPI, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import __version__, service
+from . import __version__, admin, service
 from .config import load_settings
 from .db import Database
 from .models import (
+    AdminLogOut,
     ApplyRunList,
     ApplyRunOut,
     DecisionIn,
@@ -31,6 +33,8 @@ from .models import (
     RecordOut,
     ReportIn,
     Resolution,
+    RunOutcome,
+    TimelineOut,
     utcnow,
 )
 
@@ -42,8 +46,8 @@ def get_db() -> Database:
     return Database(load_settings().db_path)
 
 
-def _err(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}})
+def _err(status: int, code: str, message: str, headers: dict[str, str] | None = None) -> JSONResponse:
+    return JSONResponse(status_code=status, content={"error": {"code": code, "message": message}}, headers=headers)
 
 
 def apply_run_out(row) -> ApplyRunOut:
@@ -66,8 +70,10 @@ def apply_run_out(row) -> ApplyRunOut:
     )
 
 
-def create_app(db: Database | None = None, allowed_hosts: list[str] | None = None) -> FastAPI:
+def create_app(db: Database | None = None, allowed_hosts: list[str] | None = None,
+               admin_token: str | None = None) -> FastAPI:
     settings = load_settings()
+    token = admin_token if admin_token is not None else settings.admin_token
     app = FastAPI(title="Break-Glass Handoff API", version=__version__, docs_url="/api/docs", openapi_url="/api/openapi.json")
     # Host allowlist blocks DNS-rebinding pages from reaching this unauthenticated local API.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts or list(settings.allowed_hosts))
@@ -75,7 +81,7 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
         CORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_methods=["GET", "POST"],
-        allow_headers=["Content-Type"],
+        allow_headers=["Content-Type", "Authorization"],
         allow_credentials=False,
     )
 
@@ -92,8 +98,9 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
-        code = {404: "not_found", 405: "method_not_allowed", 409: "conflict"}.get(exc.status_code, "error")
-        return _err(exc.status_code, code, str(exc.detail))
+        code = {401: "unauthorized", 403: "forbidden", 404: "not_found", 405: "method_not_allowed",
+                409: "conflict"}.get(exc.status_code, "error")
+        return _err(exc.status_code, code, str(exc.detail), headers=exc.headers)
 
     @app.exception_handler(service.NotFound)
     async def _nf(_: Request, exc: service.NotFound):
@@ -111,6 +118,43 @@ def create_app(db: Database | None = None, allowed_hosts: list[str] | None = Non
     async def _internal(_: Request, exc: Exception):
         log.exception("unhandled error")  # details to server log only, never to the client
         return _err(500, "internal", "internal error")
+
+    def require_admin(request: Request) -> None:
+        """Server-side gate for /api/admin/*. Fails closed when no token is configured."""
+        if not token:
+            raise HTTPException(403, "admin access is not configured on this server")
+        scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
+        # Bearer header only: a token in the URL would land in logs and browser history.
+        if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), token.encode()):
+            raise HTTPException(401, "admin credentials required", headers={"WWW-Authenticate": "Bearer"})
+
+    def _aware(name: str, raw: str | None) -> datetime | None:
+        if raw is None:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            raise service.BadInput(f"{name}: not an ISO 8601 timestamp") from None
+        if parsed.tzinfo is None:
+            raise service.BadInput(f"{name}: timezone required (e.g. a trailing Z)")
+        return parsed
+
+    @app.get("/api/admin/log", response_model=AdminLogOut, dependencies=[Depends(require_admin)])
+    def admin_log(engineer: str | None = Query(default=None, max_length=100),
+                  resource: str | None = Query(default=None, max_length=300),
+                  since: str | None = Query(default=None), until: str | None = Query(default=None),
+                  outcome: RunOutcome | None = Query(default=None),
+                  limit: int = Query(default=100, ge=1, le=500)):
+        return admin.log(database(), engineer=engineer, resource=resource, since=_aware("since", since),
+                         until=_aware("until", until), outcome=outcome, limit=limit)
+
+    @app.get("/api/admin/records/{record_id}/timeline", response_model=TimelineOut,
+             dependencies=[Depends(require_admin)])
+    def admin_timeline(record_id: str):
+        result = admin.timeline(database(), record_id)
+        if result is None:
+            raise service.NotFound(f"record {record_id} not found")
+        return result
 
     @app.get("/api/health", response_model=HealthOut)
     def health():

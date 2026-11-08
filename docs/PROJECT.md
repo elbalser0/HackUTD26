@@ -41,10 +41,10 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 | R1 detect via refresh-only JSON | Written, tested on authored fixtures only. Direction of `before`/`after` unverified. |
 | R2, R3 persist and show records, web explanation | Done in backend and UI. Verified once in Chrome against a seeded local backend. |
 | R4, R5 match and pause | Written in the CLI wrapper, tested with a mocked Terraform runner. Never run against real Terraform. |
-| R6 decision history without overwriting | **Gap.** Reason and intent are overwritten on the record ("last report wins"). Append-only events in progress. |
-| R7 decision persisted before execution | **Gap.** The wrapper verifies the exact plan, but writes the final decision after the apply. Fix in progress. |
-| R8 outcomes, unknown when missing | **Partial.** Outcomes are recorded; a crashed run stays `pending` instead of `unknown`. Fix in progress. |
-| R9 admin dashboard | Not built. No server-side admin authorization yet. |
+| R6 decision history without overwriting | Append-only `events` table (reports, decisions, wrapper reviews, run start/finish). Tested offline; actors are self-reported or the local OS user, not verified. |
+| R7 decision persisted before execution | The review, reviewer, rationale and exact plan fingerprint are saved in one transaction with the run marked `running` before Terraform runs; a failed write means nothing is applied. Tested with a mocked Terraform runner only. |
+| R8 outcomes, unknown when missing | Runs with no recorded completion become `unknown` (never success). Tested offline; not exercised against a real interrupted apply. |
+| R9 admin dashboard | Backend done: `/api/admin/log` and `/api/admin/records/{id}/timeline` read the events, with server-side bearer-token auth (one shared token via `BG_ADMIN_TOKEN`; fails closed; no per-admin identity). Tested on authored data. Dashboard UI not built. The older `/api/records` and `/api/apply-runs` endpoints remain unauthenticated (open decision). |
 | R10 history preserved | Append-style history in SQLite. Not audit-grade. |
 | R11 verified closure | `recheck` written, tested on authored fixtures. |
 | R12 suggested manual edit | Done for a single literal value. Never auto-patches. |
@@ -55,7 +55,7 @@ break-glass-infra (Terraform) → refresh-only plan → detector → SQLite ← 
 1. Finish the **real Terraform spike** on `break-glass-infra/` from Daniel's machine (partial: a real plan succeeded). Run a baseline `breakglass scan`, make the console edit, run `scan` again, then `breakglass apply`, and capture sanitized plan JSON into `backend/tests/fixtures/real/`. Needs explicit team approval for any cloud operation.
 2. Verify the detector direction against the capture and flip detector and fixtures together if wrong. Also verify the empty-saved-plan state-sync hypothesis.
 3. Run the apply-run view against a real `breakglass apply`, and check the 409 and 422 cases.
-4. Decide the admin log view scope (R9) and identity and authorization mechanism.
+4. Build the admin dashboard UI over the admin log API, and decide per-admin identity (the token is shared) and whether the older read endpoints should also require authorization.
 5. Decide whether analytics fits the hackathon release or follows the core demo.
 
 ## Provenance

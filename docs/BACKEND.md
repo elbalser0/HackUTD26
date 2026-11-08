@@ -13,6 +13,7 @@ Owner: Samuel. This is a living document; keep it current. HTTP contract: [API.m
 | CLI (`breakglass …`) | Done, tested offline |
 | Guarded apply wrapper | Done, tested with a mocked Terraform runner |
 | Verified resolution (`recheck`) | Done, tested on authored fixtures |
+| Admin log + record timeline (R9), bearer-token auth | Done, tested on authored data (`tests/test_admin.py`). Reads `events`; see API.md for limits |
 | Demo Terraform (`break-glass-infra/`) | Firewall `digitalocean_firewall.demo` ("break-glass-demo") **applied** from Daniel's machine; not attached to the droplet (`attach_firewall = false`) |
 | **Real Terraform spike** | **PARTIAL.** Real `plan` succeeded (token scopes OK). Detection of a console edit not yet exercised; runs on Daniel's machine (the operator) |
 

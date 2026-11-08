@@ -61,9 +61,18 @@ test("README and PROJECT point at break-glass-infra and describe the partial spi
   expect(readme).toMatch(/not attached/i);
 });
 
-test("README does not claim the admin dashboard or analytics exist (PRD R9, §7)", () => {
-  expect(readme).toMatch(/admin dashboard[^.]*not (yet )?(built|implemented)/i);
+test("README says the admin log API exists but the dashboard UI is not built (PRD R9)", () => {
+  expect(readme).toMatch(/admin log API/i);
+  expect(readme).toContain("BG_ADMIN_TOKEN");
+  expect(readme).toMatch(/admin dashboard UI[^.]*not (yet )?(built|implemented)/i);
   expect(readme).toMatch(/analytics[^.]*(not (yet )?(built|implemented)|proposed)/i);
+});
+
+test("PROJECT.md status matches the code: R6-R8 no longer listed as open gaps; R9 limits stated", () => {
+  expect(project).not.toMatch(/in progress/i);
+  expect(project).not.toMatch(/last report wins/i);
+  expect(project).toMatch(/shared (admin )?token/i);
+  expect(project).toMatch(/not verified|unverified/i);
 });
 
 test("PROJECT.md records the break-glass decisions and the real next gate", () => {

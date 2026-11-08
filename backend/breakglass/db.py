@@ -292,6 +292,14 @@ class Database:
         args.append(limit)
         return list(reversed(self._all(q, args)))  # the newest `limit` events, oldest first
 
+    def list_all_events(self) -> list[sqlite3.Row]:
+        """Every event, oldest first (insertion order breaks timestamp ties). Unbounded on purpose:
+        the admin log must not silently drop history."""
+        return self._all("SELECT * FROM events ORDER BY created_at ASC, rowid ASC")
+
+    def list_all_apply_runs(self) -> list[sqlite3.Row]:
+        return self._all("SELECT * FROM apply_runs ORDER BY generated_at ASC, id ASC")
+
     # ---- scans ---------------------------------------------------------
     def insert_scan(self, scan_id: str, environment: str, started_at: str, status: str, detail: str | None) -> None:
         self._x(
