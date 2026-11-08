@@ -273,8 +273,8 @@ Newest first. Filters (all optional, AND): `engineer` (case-insensitive exact ma
 Oldest first: change, every explanation, every decision and review, each wrapper run that touched the record (start, and finish or unfinished), and resolution. Also returns `gaps` (`no_reason_recorded`, `no_decision_recorded`, `no_run_linked`, `run_outcome_unknown` with `run_id`) so missing evidence is visible. `404` for an unknown record.
 
 ### Limitations (also returned in every response)
-- Actors are not verified identities. A reporter is self-reported; a wrapper reviewer is self-reported or the local OS user.
-- One shared admin token; no per-admin identity or audit of admin reads.
+- Only web actions made while signed in carry a verified account (Google sign-in); everything else is self-reported, and a wrapper reviewer is either self-reported or the local OS user (not verified). A verified account shows who submitted an explanation, not who made the console change.
+- Admin access is a Firebase sign-in from an allowlisted email, or the shared fallback token; the shared token shows that an admin read the log, not which admin. Admin reads are not audited.
 - `unknown` is not `failed`: the run may have been interrupted, crashed, or still be running.
 - Records and runs from before the events table existed show only their stored values, labelled "predates event history".
 

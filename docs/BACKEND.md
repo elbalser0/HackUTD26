@@ -35,7 +35,7 @@ break-glass-infra (Terraform) ── terraform plan -refresh-only ──► dete
 SQLite ◄── api (GET records/apply-runs, POST report/decision) ◄── Daniel's UI
 ```
 
-- `config.py`: env settings. `BG_TF_DIR` must resolve inside the repo's `break-glass-infra/`.
+- `config.py`: env settings. `BG_TF_DIR` must resolve inside the repo's `break-glass-infra/` (unless `BG_ALLOW_TF_DIR_OUTSIDE_REPO=1`).
 - `tfrunner.py`: the only place that spawns Terraform. Argument arrays, `shell=False`, fixed plan file names, plans deleted after use.
 - `detector.py` / `matcher.py` / `rules.py` / `suggest.py`: pure functions over plan JSON. Firewall rules are compared as **sets**, never by index.
 - `service.py`: records, dedup, supersede, warnings, re-check.
@@ -118,7 +118,7 @@ breakglass reset-db --yes
 breakglass demo-reset [--yes] [--skip-cloud-check]   # wipe demo data + read-only preflight (never changes the cloud)
 ```
 
-Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`), `BG_ADMIN_TOKEN` (shared admin fallback; secret), `BG_FIREBASE_PROJECT_ID` (public; turns on sign-in for web writes and Firebase admin), `BG_ADMIN_EMAILS` (comma-separated admin Google emails).
+Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PATH` (default `backend/breakglass.db`), `BG_TF_DIR` (default `break-glass-infra/`; must be inside it unless `BG_ALLOW_TF_DIR_OUTSIDE_REPO=1` is set, an escape hatch for development; it is never read from HTTP input), `BG_ENVIRONMENT` (default `demo`), `BG_CORS_ORIGINS`, `BG_TERRAFORM_BIN`, `BG_DO_TOKEN_FILE` (default `~/.secrets/digitalocean_token`), `BG_ADMIN_TOKEN` (shared admin fallback; secret), `BG_FIREBASE_PROJECT_ID` (public; turns on sign-in for web writes and Firebase admin), `BG_ADMIN_EMAILS` (comma-separated admin Google emails), `BG_API_URL` (default `http://127.0.0.1:8000`; only `breakglass demo-reset` uses it, to check the API is reachable).
 
 **Rollout order for sign-in:** set `BG_FIREBASE_PROJECT_ID` on the operator machine only **after** the UI sends Firebase ID tokens. Until then the UI's report and decision forms would get `401`.
 
