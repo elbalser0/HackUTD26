@@ -4,9 +4,12 @@ import { AccountBar } from "./AuthProvider";
 /** Admin layout: ADMIN sidebar and an Admin badge. Read-only by design. */
 export function AdminShell({
   active,
+  crumb,
   children,
 }: {
   active: "overview" | "records";
+  /** Replaces the default breadcrumb (used by the record page). */
+  crumb?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -44,7 +47,9 @@ export function AdminShell({
         <div className="main">
           <header className="top">
             <div className="crumbs">
-              {active === "overview" ? (
+              {crumb ? (
+                crumb
+              ) : active === "overview" ? (
                 <>
                   Argus / <b>Overview</b>
                 </>

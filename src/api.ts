@@ -55,6 +55,8 @@ export interface EmergencyRecord {
   evidenceSource: string;
   /** Assurance of the latest explanation: "self-reported" or a verified Google account; null when there is no reason. */
   reporterAssurance: string | null;
+  /** When the intent was last set (report with intent, or decision); null when never set. */
+  intentUpdatedAt: string | null;
   /** Latest of detection ("detected"), any event for the record, and resolution ("resolved"). */
   lastActivity: { at: string; type: string } | null;
 }
@@ -208,6 +210,8 @@ export interface Me {
 }
 
 export interface Adapter {
+  /** Admin only: one record's history and gaps, with the signed-in ID token. */
+  adminRecordTimeline(id: string): Promise<Timeline>;
   /** Admin only: team-wide events with the signed-in ID token (the token-based adminLog is the legacy screen's). */
   adminEvents(filters: AdminFilters): Promise<AdminLog>;
   /** Admin only. Sends the signed-in ID token; the server decides access. */
@@ -278,6 +282,7 @@ export function fromWireRecord(w: Wire): EmergencyRecord {
     lastCheckAt: w.last_check_at ?? null,
     evidenceSource: w.evidence_source,
     reporterAssurance: w.reporter_assurance ?? null,
+    intentUpdatedAt: w.intent_updated_at ?? null,
     lastActivity: w.last_activity
       ? { at: w.last_activity.at, type: w.last_activity.type }
       : null,
@@ -464,6 +469,13 @@ async function getHealth(): Promise<Health | null> {
 }
 
 const realAdapter: Adapter = {
+  async adminRecordTimeline(id) {
+    return fromWireTimeline(
+      await http(`/admin/records/${encodeURIComponent(id)}/timeline`, {
+        headers: await signedInHeaders(),
+      }),
+    );
+  },
   async adminEvents(f) {
     const q = new URLSearchParams();
     for (const [k, v] of Object.entries(f)) if (v) q.set(k, v);

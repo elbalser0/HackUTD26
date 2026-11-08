@@ -5,6 +5,7 @@ import { useAuth } from "./auth";
 import { useAsync } from "./useAsync";
 import { AccountBar, AuthGate, AuthProvider } from "./components/AuthProvider";
 import { AdminShell } from "./components/AdminShell";
+import { AdminRecord } from "./components/AdminRecord";
 import { AllRecords } from "./components/AllRecords";
 import { Overview } from "./components/Overview";
 import { Loading } from "./components/States";
@@ -128,6 +129,20 @@ function AdminHome({ path, search }: { path: string; search: string }) {
       return (
         <AdminShell active="overview">
           <Overview />
+        </AdminShell>
+      );
+    const one = path.match(/^\/admin\/records\/([^/]+)$/);
+    if (one)
+      return (
+        <AdminShell
+          active="records"
+          crumb={
+            <>
+              <a href="#/admin/records">All records</a> / <b>Record</b>
+            </>
+          }
+        >
+          <AdminRecord key={one[1]} id={decodeURIComponent(one[1])} />
         </AdminShell>
       );
     if (path === "/admin/records" || path === "/admin/events")

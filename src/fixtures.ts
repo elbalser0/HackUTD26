@@ -57,6 +57,7 @@ const records: EmergencyRecord[] = [
     intent: "keep",
     lastCheckAt: ago(2),
     reporterAssurance: "self-reported",
+    intentUpdatedAt: ago(24 * 60),
     lastActivity: { at: ago(25 * 60), type: "report" },
   },
   {
@@ -75,6 +76,7 @@ const records: EmergencyRecord[] = [
     intent: "unset",
     lastCheckAt: ago(2),
     reporterAssurance: null,
+    intentUpdatedAt: null,
     lastActivity: { at: ago(90), type: "detected" },
   },
 ];
@@ -91,6 +93,51 @@ const gate = async () => {
 };
 
 export const fixtureAdapter: Adapter = {
+  /** Fake history for ?fixture=admin, built from the fixture record. */
+  async adminRecordTimeline(id) {
+    await gate();
+    const r = find(id);
+    const events: AdminEvent[] = [
+      {
+        at: r.firstDetectedAt,
+        type: "change_detected",
+        environment: r.environment,
+        recordIds: [r.id],
+        runId: null,
+        resourceAddresses: [r.resourceAddress],
+        actor: null,
+        actorAssurance: "system",
+        outcome: null,
+        planFingerprint: null,
+        detail: r.summary,
+      },
+      ...(r.reason
+        ? [
+            {
+              at: r.reportedAt ?? r.firstDetectedAt,
+              type: "explained" as const,
+              environment: r.environment,
+              recordIds: [r.id],
+              runId: null,
+              resourceAddresses: [r.resourceAddress],
+              actor: r.reporter,
+              actorAssurance: "self-reported",
+              outcome: null,
+              planFingerprint: null,
+              detail: r.reason,
+            },
+          ]
+        : []),
+    ];
+    return {
+      recordId: r.id,
+      events,
+      gaps: r.reason
+        ? []
+        : [{ code: "no_reason_recorded", message: "No reason was recorded for this change.", runId: null }],
+      limitations: ["Fixture data: this history is made up."],
+    };
+  },
   /** Fake events for ?fixture=admin, built from the fixture records. */
   async adminEvents(f) {
     await gate();

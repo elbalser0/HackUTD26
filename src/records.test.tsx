@@ -46,6 +46,7 @@ const rec = (o: Partial<EmergencyRecord> = {}): EmergencyRecord => ({
   lastCheckAt: new Date().toISOString(),
   evidenceSource: "terraform-refresh-only",
   reporterAssurance: null,
+  intentUpdatedAt: null,
   lastActivity: null,
   ...o,
 });
@@ -88,6 +89,9 @@ function stub(o: Partial<Adapter> = {}, list = four()): Adapter {
       throw new Error("unused");
     },
     adminEvents: async () => ({ events: [], totalMatching: 0, limitations: [] }),
+    adminRecordTimeline: async () => {
+      throw new Error("unused");
+    },
     me: async () => ({ signedIn: false, email: null, displayName: null, role: null, authMode: "none" as const }),
     recordEvents: async () => [],
     getApplyRun: async () => {

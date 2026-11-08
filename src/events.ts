@@ -51,3 +51,29 @@ export function shortUtc(iso: string): string {
   const day = d.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   return `${day}, ${d.toISOString().slice(11, 16)}`;
 }
+
+/** The most recent run result linked to a record, or null when no run touched it. */
+export function linkedRun(events: AdminEvent[]): AdminEvent | null {
+  const runs = events.filter((e) => e.type === "run_finished" || e.type === "run_unfinished");
+  if (runs.length === 0) return null;
+  return runs.reduce((a, b) => (Date.parse(b.at) >= Date.parse(a.at) ? b : a));
+}
+
+export const HISTORY_TITLE: Record<AdminEvent["type"], string> = {
+  change_detected: "Detected by scan",
+  explained: "Report",
+  decision: "Decision",
+  review: "Reviewed at apply",
+  run_started: "Apply started",
+  run_finished: "Apply finished",
+  run_unfinished: "Apply unfinished",
+  resolved: "Resolved",
+};
+
+const GAP_TITLE: Record<string, string> = {
+  no_reason_recorded: "No reason recorded",
+  no_decision_recorded: "No decision recorded",
+  no_run_linked: "No run linked",
+  run_outcome_unknown: "Run outcome unknown",
+};
+export const gapTitle = (code: string) => GAP_TITLE[code] ?? humanize(code);
