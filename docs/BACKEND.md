@@ -132,6 +132,7 @@ Environment: `BG_ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1]`), `BG_DB_PA
 ## Credentials
 
 - The DigitalOcean token lives in `~/.secrets/digitalocean_token` (owner-only ACL), outside the repo. `tfrunner` reads it into the Terraform **child process environment only**, and only if `DIGITALOCEAN_TOKEN` isn't already set. It is never printed, logged or stored.
+- **Backend settings file:** `load_settings()` also reads the repo-root `.env` (path override `BG_DOTENV_FILE`; `BG_NO_DOTENV=1` disables it). Only keys starting with `BG_` are read; every other line, including `DIGITALOCEAN_TOKEN`, is skipped and never stored. A value already in the real environment wins. `os.environ` is not modified. Tests always opt out (`tests/conftest.py`) so a developer's `.env` cannot change results.
 - Never commit: `*.tfstate*`, `*.tfplan`, `*.tfvars`, `.terraform/`, `break-glass-infra/raw/`, `backend/*.db`, `.env`. All of these are gitignored. State and plans can contain sensitive values.
 
 ## Security hardening (from the independent review, 2026-11-07)

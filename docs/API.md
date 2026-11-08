@@ -223,7 +223,7 @@ All errors use this envelope:
 
 ## Sign-in (Firebase)
 
-Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not a secret). The browser signs in with the Firebase JS SDK (Google provider) and sends the Firebase **ID token** on writes as `Authorization: Bearer <id token>`. Never put it in a URL.
+Enabled when the server sets `BG_FIREBASE_PROJECT_ID` (a public identifier, not a secret), in the terminal or as a `BG_` line in the repo-root `.env`; restart the server after a change. The browser signs in with the Firebase JS SDK (Google provider) and sends the Firebase **ID token** on writes as `Authorization: Bearer <id token>`. Never put it in a URL.
 
 | Endpoint | Firebase not configured | Firebase configured |
 |---|---|---|
