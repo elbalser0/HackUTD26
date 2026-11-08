@@ -1,6 +1,6 @@
 # Handoff for the next agent
 
-Written 2026-11-07 after PR #11; updated after PR #16 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
+Written 2026-11-07 after PR #11; updated after PR #18 (admin dashboard UI, keep/defer rationale and `demo-reset`, Firebase Google sign-in, rename to Argus and logo). Read this first, then the [PRD](<Break-Glass Handoff — PRD.md>) (source of truth for scope and acceptance; it records requirements, not results). This file is a status snapshot, not a spec: when it disagrees with the code or the PRD, trust those.
 
 ## What this is
 
@@ -31,7 +31,7 @@ These came from corrections and approvals in earlier sessions. Follow them.
 | Google sign-in | `auth.py`, `src/auth.ts`, `src/components/AuthProvider.tsx` | Off unless `BG_FIREBASE_PROJECT_ID` is set. Then web writes need a verified-email Firebase ID token (401/403 with distinct codes) and record the email as `google-account (verified sign-in)`; reads stay open. Full-page sign-in, header account bar, session ends when the tab closes; a fresh ID token per write, none stored. The Firebase web config (`VITE_FIREBASE_*`) is public. |
 | HTTP API | `api.py`, `docs/API.md` | Read plus annotate only; no route runs Terraform. |
 | Admin log (PRD R9 backend) | `admin.py`, `/api/admin/log`, `/api/admin/records/{id}/timeline` | Fails closed. Accepts a Firebase sign-in whose email is in `BG_ADMIN_EMAILS` (signed-in non-admins get 403), or the shared fallback token `BG_ADMIN_TOKEN`. Reads events, records and runs. |
-| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` ("Continue as <email>" or the shared token; verified with stubs and fixtures only). |
+| Web UI | `src/` | Records list and detail, report form, apply-warning view; phone layout checked at 375 and 320px. Read-only. Admin dashboard UI at `#/admin` ("Continue as <email>" or the shared token; run against the real backend with a throwaway token; see "What is verified"). |
 | Real captures and replay tests | `backend/tests/fixtures/real/`, `tests/test_real_replay.py` | Sanitized (fake firewall id, `203.0.113.10`, fake droplet id). Its README lists what was replaced. |
 | CI | `.github/workflows/ci.yml` | Two jobs: frontend (`lint`, `test`, `build`) and `backend` (`pytest`, offline). |
 
@@ -44,6 +44,8 @@ The older `/api/records` and `/api/apply-runs` endpoints are still unauthenticat
 - The real normal plan reverses that rule as an in-place `update`, and the matcher flags it. A plan from the clean state flags nothing.
 - The wrapper pauses before any apply, with "No reason recorded" and with a reason; cancel and keep applied nothing.
 - The UI (LIVE API badge) and the admin log over HTTP showed the real record and runs for two actors, with the reviewed plan fingerprint; the admin API returns 401 without a token.
+- The admin dashboard UI against the real backend with a throwaway `BG_ADMIN_TOKEN` (2026-11-07, real browser, no Terraform or cloud access): wrong token shows "Token rejected" (401), no server token shows "not configured" (403), the real spike record and the authored record appear with actor assurance labels, engineer and outcome filters work, a record timeline shows the real history through `verified_aligned`, an unknown record id shows "not found", and the token is forgotten on reload. Re-checked on `main` after the Google sign-in UI merged (shared-token path): each finished run shows its outcome once.
+- Not yet seen live in the admin dashboard: an `unknown` outcome and the timeline gaps box (the data has no unfinished run, and creating one needs a real interrupted apply), and the Google-admin path (needs a Firebase project; the team ran the sign-in itself).
 - After the rule was deleted, `breakglass recheck` resolved the record as `verified_aligned` with its history intact (R11).
 - One real bug was found and fixed: the provider reports `droplet_ids` and `tags` as `null` in older state and `[]` live, which made recheck refuse to resolve any record.
 
@@ -105,7 +107,7 @@ Local state (`break-glass-infra/terraform.tfstate`, `terraform.tfvars`, `.terraf
 
 ## Next steps
 
-1. **Google sign-in UI improvements**: the team ran it and it works; they plan to improve it. Wait for their direction. Then run the admin dashboard UI against the real backend (signed-in admin email, or a throwaway `BG_ADMIN_TOKEN`; bearer header only, never in a URL).
+1. **Google sign-in UI improvements**: the team ran it and it works; they plan to improve it. Wait for their direction. Then run the admin dashboard with a signed-in admin email (the shared-token path already ran against the real backend; see "What is verified"). Bearer header only, never in a URL.
 2. **Optional real spike items, each needing approval:** a confirmed revert or override apply (reviewed-plan execution, changed-plan abort), the keep-path state sync (H5), and capturing a drift-free refresh-only plan (likely needs `terraform apply` of a refresh-only plan to clear the provider noise in state; that changes state only).
 3. **Decisions for the user:** whether the shared `BG_ADMIN_TOKEN` fallback stays now that per-admin sign-in exists, whether the local SQLite file is enough or the history needs a shared store, whether `/api/records` and `/api/apply-runs` should also require authorization, retention, and the 409/422 UI states.
 4. **Later, only after the core demo works:** analytics and the classifier (PRD §7, proposed). The user asked to skip the demo script, fallback video and sponsor conversations for now; don't start them unprompted.

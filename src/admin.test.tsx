@@ -458,3 +458,60 @@ test("the existing records list still has no admin data and the nav links to the
     "#/admin",
   );
 });
+
+const count = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+
+test("a finished run states its outcome once: the backend's 'outcome: X' detail prefix is not repeated", async () => {
+  setAdapter(
+    stub({
+      adminLog: async () =>
+        log({
+          events: [
+            ev({ type: "run_finished", outcome: "kept", detail: "outcome: kept" }),
+            ev({ type: "run_finished", outcome: "failed", detail: "outcome: failed — terraform exited 1" }),
+            ev({
+              type: "run_finished",
+              outcome: "cancelled",
+              detail: "outcome: cancelled (from the stored record; predates event history)",
+            }),
+          ],
+          totalMatching: 3,
+        }),
+    }),
+  );
+  render(<App />);
+  await signIn();
+  const rows = await screen.findAllByRole("listitem", { name: /event/i });
+  expect(count(rows[0].textContent!, "outcome: kept")).toBe(1);
+  // the human note after the prefix is kept
+  expect(count(rows[1].textContent!, "outcome: failed")).toBe(1);
+  expect(rows[1]).toHaveTextContent("terraform exited 1");
+  // exactly the note: no dangling separator left behind
+  expect(rows[1].querySelector(".msg")!.textContent).toBe("terraform exited 1");
+  // the legacy label is evidence about data quality and must survive
+  expect(count(rows[2].textContent!, "outcome: cancelled")).toBe(1);
+  expect(rows[2]).toHaveTextContent("predates event history");
+});
+
+test("an unfinished run keeps its explanation text and shows 'outcome: unknown' once", async () => {
+  setAdapter(
+    stub({
+      adminLog: async () =>
+        log({
+          events: [ev({ type: "run_unfinished", outcome: "unknown", detail: "No completion recorded; the run may have been interrupted." })],
+        }),
+    }),
+  );
+  render(<App />);
+  await signIn();
+  const row = (await screen.findAllByRole("listitem", { name: /event/i }))[0];
+  expect(count(row.textContent!, "outcome: unknown")).toBe(1);
+  expect(row).toHaveTextContent("may have been interrupted");
+});
+
+test("a detail that merely mentions the outcome elsewhere (not as its prefix) is not altered", async () => {
+  setAdapter(stub({ adminLog: async () => log({ events: [ev({ type: "run_finished", outcome: "kept", detail: "retry after outcome: kept earlier" })] }) }));
+  render(<App />);
+  await signIn();
+  expect((await screen.findAllByRole("listitem", { name: /event/i }))[0]).toHaveTextContent("retry after outcome: kept earlier");
+});

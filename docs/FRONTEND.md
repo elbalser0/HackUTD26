@@ -12,7 +12,7 @@ Branch: `feat/break-glass-ui`. Stack: React + TS + Vite + Vitest. Contract: `doc
 - [x] Wire mapping against the real contract (`src/api.ts`)
 - [ ] Apply-run view against a REAL run (none exists; runs are created only by `breakglass apply` in the terminal, which needs real infra)
 - [x] Mobile layout check at 375px and 320px (fixture data): no horizontal overflow; tap targets >= 44px; breadcrumb shows the current page; back link spaced from the eyebrow
-- [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) built at `#/admin`: token held in memory only, never in URL or storage; verified with stub adapters and fixture data (`?fixture`, token `demo`), not against the real backend
+- [ ] Remaining visual polish (e.g. tight spacing between tag badges and the `inbound_rule · added` line); admin dashboard (PRD R9) built at `#/admin`: shared token held in memory only, never in URL or storage; verified with stub adapters and fixture data (`?fixture`, token `demo`), and run in a real browser against the real backend with a throwaway token (2026-11-07). Not yet run live: the Google-admin path, an `unknown` outcome, the gaps box
 
 ## Google sign-in (Firebase)
 
@@ -43,7 +43,7 @@ Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE D
 
 ## Verification evidence (2026-11-07)
 
-- `npm test`: 12 passed (stub adapter + wire-mapping; not backend integration)
+- `npm test`: 110 passed on 2026-11-07 (stub adapters and wire mapping, docs and CSS contracts; not backend integration)
 - `npm run lint`: clean; `npm run build`: ok
 - REAL backend (branch `feat/break-glass-backend` @41280dd, seeded demo record) in Chrome via the Vite proxy:
   - list/detail render live data with "LIVE API" badge and demo-data tag (`demo-authored · authored-fixture`)
@@ -51,6 +51,7 @@ Fixtures only with `?fixture[=empty|error|stale|failed]` (shows a "DEV FIXTURE D
   - reason containing `<b>edit</b>` rendered as plain text
   - backend stopped → proxy 502 → UI shows "Backend unavailable" error, not an empty list
 - Mobile pass (2026-11-07): measured in Chrome via 375px/320px iframes on `?fixture` data. `src/mobile.test.ts` guards the stylesheet rules only; it does not prove layout.
+- Admin dashboard, real backend, throwaway shared token (2026-11-07): 401 and 403 states, live log with actor labels, filters, record timeline, 404, token forgotten on reload; each finished run shows its outcome once.
 - NOT verified against the real backend: apply-run view (only stub/fixture tests), 409 on resolved record, 422 messages.
 
 ## Notes for Samuel
