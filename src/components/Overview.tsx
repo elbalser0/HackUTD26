@@ -3,6 +3,7 @@
  * GET /api/admin/overview. Read-only; counts events, not incidents.
  */
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { api } from "../api";
 import type { Overview as OverviewData, OverviewWindow } from "../api";
 import { age } from "../format";
@@ -53,6 +54,17 @@ export function Overview() {
   );
 }
 
+function Kpi({ className, href, children }: { className: string; href?: string; children: ReactNode }) {
+  const cls = `kpi${className ? " " + className : ""}`;
+  return href ? (
+    <a className={cls} href={href}>
+      {children}
+    </a>
+  ) : (
+    <div className={cls}>{children}</div>
+  );
+}
+
 function Body({ o }: { o: OverviewData }) {
   const label = o.window === "7d" ? "7 d" : "24 h";
   const events = totalOf(o.eventsByType);
@@ -62,14 +74,14 @@ function Body({ o }: { o: OverviewData }) {
   return (
     <>
       <section className="kpis" aria-label="Summary">
-        <div className={`kpi${o.openWithoutReason > 0 ? " warn" : ""}`}>
+        <a className={`kpi${o.openWithoutReason > 0 ? " warn" : ""}`} href="#/admin/records">
           <span className="label">Open records</span>
           <span className="value">{o.openRecords}</span>
           <span className="note">
             <span className={`dot${o.openWithoutReason > 0 ? " amber" : ""}`} />
-            {o.openWithoutReason} without a reason
+            {o.openWithoutReason} without a reason · view all
           </span>
-        </div>
+        </a>
         <div className={`kpi${scanBad ? " warn" : ""}`}>
           <span className="label">Last scan</span>
           <span className="value">{o.lastScan ? `${age(o.lastScan.at)} ago` : "Never"}</span>
@@ -78,7 +90,7 @@ function Body({ o }: { o: OverviewData }) {
             {o.lastScan ? `scan ${o.lastScan.status}` : "no scan recorded"}
           </span>
         </div>
-        <div className={`kpi${runBad ? " warn" : ""}`}>
+        <Kpi className={runBad ? "warn" : ""} href={run ? "#/admin/events" : undefined}>
           <span className="label">Last apply</span>
           <span className="value">{run ? humanize(run.outcome) : "None"}</span>
           <span className="note">
@@ -86,20 +98,25 @@ function Body({ o }: { o: OverviewData }) {
             {run === null
               ? "no apply run recorded"
               : run.outcome === "unknown"
-                ? `no completion recorded, ${age(run.at)} ago`
-                : `${age(run.at)} ago`}
+                ? `no completion recorded, ${age(run.at)} ago · see events`
+                : `${age(run.at)} ago · see events`}
           </span>
-        </div>
-        <div className="kpi">
+        </Kpi>
+        <a className="kpi" href="#/admin/events">
           <span className="label">Events, {label}</span>
           <span className="value">{events}</span>
-          <span className="note">{eventBreakdown(o.eventsByType) || "none in this window"}</span>
-        </div>
+          <span className="note">
+            {eventBreakdown(o.eventsByType) || "none in this window"} · see events
+          </span>
+        </a>
       </section>
 
       <section className="card" aria-labelledby="att">
         <div className="card-head">
           <h2 id="att">Open without a reason</h2>
+          <a className="link" href="#/admin/records">
+            All records
+          </a>
         </div>
         {o.needsReason.length === 0 ? (
           <p className="sub">No open records without a reason.</p>
@@ -140,14 +157,25 @@ function Body({ o }: { o: OverviewData }) {
             <p className="sub">No runs in this window.</p>
           ) : (
             <div className="list">
-              {outcomeRows(o.runOutcomes).map((r) => (
-                <div className="item" key={r.code}>
-                  <div className="grow t">{humanize(r.code)}</div>
-                  <span className={`tag${r.code === "unknown" || r.code === "failed" ? " amber" : ""}`}>
-                    {r.count}
-                  </span>
-                </div>
-              ))}
+              {outcomeRows(o.runOutcomes).map((r) => {
+                const body = (
+                  <>
+                    <div className="grow t">{humanize(r.code)}</div>
+                    <span className={`tag${r.code === "unknown" || r.code === "failed" ? " amber" : ""}`}>
+                      {r.count}
+                    </span>
+                  </>
+                );
+                return r.code === "unknown" ? (
+                  <a className="item" key={r.code} href="#/admin/events">
+                    {body}
+                  </a>
+                ) : (
+                  <div className="item" key={r.code}>
+                    {body}
+                  </div>
+                );
+              })}
             </div>
           )}
           <p className="sub">

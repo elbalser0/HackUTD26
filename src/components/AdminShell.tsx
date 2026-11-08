@@ -1,5 +1,29 @@
 import type { ReactNode } from "react";
 import { AccountBar } from "./AuthProvider";
+import { AdminPalette } from "./AdminPalette";
+import { PaletteProvider } from "./PaletteContext";
+import { usePalette } from "../paletteContext";
+
+const SHORTCUT =
+  typeof navigator !== "undefined" && /mac|iphone|ipad/i.test(navigator.platform)
+    ? "⌘K"
+    : "Ctrl K";
+
+function SearchButton() {
+  const palette = usePalette();
+  return (
+    <>
+      <button
+        className="chip search-btn"
+        aria-haspopup="dialog"
+        onClick={() => palette.setOpen(true)}
+      >
+        Search records and events <span className="kbd">{SHORTCUT}</span>
+      </button>
+      {palette.open && <AdminPalette onClose={() => palette.setOpen(false)} />}
+    </>
+  );
+}
 
 /** Admin layout: ADMIN sidebar and an Admin badge. Read-only by design. */
 export function AdminShell({
@@ -13,6 +37,7 @@ export function AdminShell({
   children: ReactNode;
 }) {
   return (
+    <PaletteProvider>
     <div className="ar">
       <a className="skip" href="#main">
         Skip to content
@@ -60,6 +85,7 @@ export function AdminShell({
               )}
             </div>
             <div className="top-right">
+              <SearchButton />
               <span className="role">Admin</span>
               <AccountBar />
             </div>
@@ -70,5 +96,6 @@ export function AdminShell({
         </div>
       </div>
     </div>
+    </PaletteProvider>
   );
 }

@@ -9,47 +9,13 @@ import type { KeyboardEvent } from "react";
 import type { EmergencyRecord } from "../api";
 import { allTermsIn, MAX_RECORDS, recordMatches, termsOf } from "../palette";
 import { BUCKETS, bucketOf } from "../records";
+import { Highlight } from "./PaletteParts";
+import { metaFor, tagFor } from "../paletteRows";
 import type { Bucket } from "../records";
 
 type Row =
   | { kind: "record"; id: string; record: EmergencyRecord }
   | { kind: "filter"; id: string; bucket: Bucket; label: string };
-
-const INTENT_LABEL: Record<string, string> = {
-  keep: "Keep",
-  revert: "Revert",
-  unsure: "Undecided",
-};
-
-function Highlight({ text, terms }: { text: string; terms: string[] }) {
-  if (terms.length === 0) return <>{text}</>;
-  const esc = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const parts = text.split(new RegExp(`(${esc.join("|")})`, "i"));
-  // split with one capture group puts the matches at the odd indexes
-  return (
-    <>
-      {parts.map((p, i) => (i % 2 === 1 ? <mark key={i}>{p}</mark> : p))}
-    </>
-  );
-}
-
-function tagFor(r: EmergencyRecord): { label: string; tone: string } {
-  const b = bucketOf(r);
-  if (b === "needs") return { label: "Needs a reason", tone: "amber" };
-  if (b === "resolved") return { label: "Resolved", tone: "green" };
-  return { label: INTENT_LABEL[r.intent] ?? "Explained", tone: "blue" };
-}
-
-function metaFor(r: EmergencyRecord): string {
-  const x = r.observed ?? r.baseline;
-  const what = `${x?.protocol ?? r.attribute} ${x?.portRange ?? ""} ${r.changeKind}`
-    .replace(/\s+/g, " ")
-    .trim();
-  const b = bucketOf(r);
-  const who =
-    b === "needs" ? "needs a reason" : b === "resolved" ? "resolved" : (r.reporter ?? "unknown");
-  return `${what} · ${who}`;
-}
 
 export function Palette({
   records,

@@ -20,3 +20,29 @@ export function recordMatches(r: EmergencyRecord, terms: string[]): boolean {
 
 /** Rows shown for records before the list is capped (the group label still shows the full count). */
 export const MAX_RECORDS = 8;
+
+import type { AdminEvent } from "./api";
+import { EVENT_LABEL } from "./events";
+
+/** Admin scope: who did it, which resources, the detail text, or the event's label. */
+export function eventMatches(e: AdminEvent, terms: string[]): boolean {
+  return allTermsIn(
+    [EVENT_LABEL[e.type], e.actor ?? "", ...e.resourceAddresses, e.detail ?? ""].join(" "),
+    terms,
+  );
+}
+
+export const MAX_EVENTS = 5;
+
+/** Admin "Go to" pages. */
+export const GO_TO: { label: string; hash: string }[] = [
+  { label: "Overview", hash: "#/admin" },
+  { label: "All records", hash: "#/admin/records" },
+];
+
+/** Where an event leads: its record, or the Events view at its hour when no record is linked. */
+export function eventHash(e: AdminEvent): string {
+  return e.recordIds.length > 0
+    ? `#/admin/records/${encodeURIComponent(e.recordIds[0])}`
+    : `#/admin/events?hour=${encodeURIComponent(e.at)}`;
+}

@@ -394,3 +394,41 @@ test("bars with events are links to that hour in the Events view; empty hours ar
   expect(links[1]).toHaveAttribute("aria-label", expect.stringMatching(/2 events/));
   expect(container.querySelectorAll(".chart div.col")).toHaveLength(22);
 });
+
+// ---- links (as drawn in the design: Open records, Last apply, Events, Unknown outcome, card head) ------
+
+test("KPIs link to their targets; Last scan is not a link", async () => {
+  setAdapter(stub(admin));
+  render(<App />);
+  await shown();
+  expect(kpi("Open records").tagName).toBe("A");
+  expect(kpi("Open records")).toHaveAttribute("href", "#/admin/records");
+  expect(within(kpi("Open records")).getByText(/view all/)).toBeInTheDocument();
+  expect(kpi("Last apply")).toHaveAttribute("href", "#/admin/events");
+  expect(within(kpi("Last apply")).getByText(/see events/)).toBeInTheDocument();
+  expect(kpi("Events, 24 h")).toHaveAttribute("href", "#/admin/events");
+  expect(within(kpi("Events, 24 h")).getByText(/see events/)).toBeInTheDocument();
+  expect(kpi("Last scan").tagName).not.toBe("A");
+});
+
+test("'Last apply: None' is not a link (there is nothing to look at)", async () => {
+  setAdapter(stub(admin, async (w) => overview({ window: w, lastRun: null })));
+  render(<App />);
+  await shown();
+  expect(kpi("Last apply").tagName).not.toBe("A");
+});
+
+test("the Unknown run-outcome row links to the Events view; other rows do not; card head links to All records", async () => {
+  setAdapter(
+    stub(admin, async (w) => overview({ window: w, runOutcomes: { applied_no_warnings: 3, unknown: 2 } })),
+  );
+  render(<App />);
+  await shown();
+  const card = screen.getByRole("region", { name: "Run outcomes" });
+  const rows = [...card.querySelectorAll(".item")];
+  expect(rows[0].tagName).toBe("A");
+  expect(rows[0]).toHaveAttribute("href", "#/admin/events");
+  expect(rows[1].tagName).not.toBe("A");
+  const att = screen.getByRole("region", { name: "Open without a reason" });
+  expect(within(att).getByRole("link", { name: "All records" })).toHaveAttribute("href", "#/admin/records");
+});
